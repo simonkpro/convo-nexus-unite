@@ -47,7 +47,7 @@ const formatTimeAgo = (dateString: string) => {
 };
 
 export const ConversationList = ({ onSelectConversation, selectedId }: ConversationListProps) => {
-  const { conversations, loading, error } = useConversations();
+  const { conversations, loading, error, markAsRead, updateStatus, generateSummary } = useConversations();
 
   return (
     <div className="h-full flex flex-col">
@@ -97,7 +97,12 @@ export const ConversationList = ({ onSelectConversation, selectedId }: Conversat
                 "p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors",
                 selectedId === conversation.id && "bg-blue-50 border-blue-200"
               )}
-              onClick={() => onSelectConversation(conversation)}
+              onClick={() => {
+                onSelectConversation(conversation);
+                if (conversation.is_unread) {
+                  markAsRead(conversation.id);
+                }
+              }}
             >
               <div className="flex items-start space-x-3">
                 <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
@@ -140,6 +145,17 @@ export const ConversationList = ({ onSelectConversation, selectedId }: Conversat
                     </div>
                     
                     <div className="flex items-center space-x-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          generateSummary(conversation.id);
+                        }}
+                        className="h-6 w-6 p-0"
+                      >
+                        <CheckCircle className="w-3 h-3" />
+                      </Button>
                       <Clock className="w-3 h-3 text-gray-400" />
                       <span className="text-xs text-gray-400">{formatTimeAgo(conversation.last_message_at)}</span>
                     </div>

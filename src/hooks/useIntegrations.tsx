@@ -81,6 +81,24 @@ export const useIntegrations = () => {
     }
   };
 
+  const syncGmail = async () => {
+    try {
+      toast.loading('Syncing Gmail messages...');
+      
+      const { data, error } = await supabase.functions.invoke('gmail-sync', {
+        body: { action: 'sync_emails' }
+      });
+
+      if (error) throw error;
+
+      toast.success(`Synced ${data.synced_messages} new messages from Gmail!`);
+      return data;
+    } catch (error) {
+      console.error('Gmail sync error:', error);
+      toast.error('Failed to sync Gmail messages');
+    }
+  };
+
   const connectTelegram = async () => {
     try {
       const { data, error } = await supabase.functions.invoke('telegram-setup', {
@@ -97,6 +115,24 @@ export const useIntegrations = () => {
     }
   };
 
+  const syncTelegram = async () => {
+    try {
+      toast.loading('Syncing Telegram chats...');
+      
+      const { data, error } = await supabase.functions.invoke('telegram-sync', {
+        body: { action: 'sync_chats' }
+      });
+
+      if (error) throw error;
+
+      toast.success(`Synced ${data.synced_messages} new messages from Telegram!`);
+      return data;
+    } catch (error) {
+      console.error('Telegram sync error:', error);
+      toast.error('Failed to sync Telegram messages');
+    }
+  };
+
   const connectOpenAI = async () => {
     try {
       const { data, error } = await supabase.functions.invoke('openai-setup', {
@@ -110,6 +146,24 @@ export const useIntegrations = () => {
     } catch (error) {
       console.error('OpenAI connection error:', error);
       toast.error('Failed to connect OpenAI');
+    }
+  };
+
+  const generateSummary = async (conversationId: string) => {
+    try {
+      toast.loading('Generating AI summary...');
+      
+      const { data, error } = await supabase.functions.invoke('ai-summarize', {
+        body: { action: 'generate_summary', conversation_id: conversationId }
+      });
+
+      if (error) throw error;
+
+      toast.success('AI summary generated successfully!');
+      return data.summary;
+    } catch (error) {
+      console.error('AI summary error:', error);
+      toast.error('Failed to generate AI summary');
     }
   };
 
@@ -156,7 +210,10 @@ export const useIntegrations = () => {
     loading,
     connectIntegration,
     disconnectIntegration,
-    refreshIntegrations: fetchIntegrations
+    refreshIntegrations: fetchIntegrations,
+    syncGmail,
+    syncTelegram,
+    generateSummary
   };
 };
 

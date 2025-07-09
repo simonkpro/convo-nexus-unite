@@ -15,7 +15,7 @@ import {
 import { useIntegrations } from "@/hooks/useIntegrations";
 
 export const IntegrationsView = () => {
-  const { integrations, loading, connectIntegration, disconnectIntegration } = useIntegrations();
+  const { integrations, loading, connectIntegration, disconnectIntegration, syncGmail, syncTelegram, generateSummary } = useIntegrations();
 
   const availableIntegrations = [
     {
@@ -172,9 +172,27 @@ export const IntegrationsView = () => {
                       Status: {integration.lastSync}
                     </span>
                   </div>
-                  <Button variant="outline" size="sm">
-                    <Settings className="w-4 h-4" />
-                  </Button>
+                  <div className="flex items-center space-x-2">
+                    {integration.connected && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          if (integration.platform === 'gmail') {
+                            syncGmail();
+                          } else if (integration.platform === 'telegram') {
+                            syncTelegram();
+                          }
+                        }}
+                        disabled={integration.platform === 'openai'}
+                      >
+                        {integration.platform === 'openai' ? 'AI Ready' : 'Sync Now'}
+                      </Button>
+                    )}
+                    <Button variant="outline" size="sm">
+                      <Settings className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </Card>
             );
