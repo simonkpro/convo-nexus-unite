@@ -37,7 +37,7 @@ export const useIntegrations = () => {
         id: integration.platform,
         name: getPlatformName(integration.platform),
         description: getPlatformDescription(integration.platform),
-        icon: getPlatformIcon(integration.platform),
+        icon: integration.platform, // Just pass the platform name, not the icon component
         connected: integration.status === 'connected',
         status: integration.status === 'connected' ? 'active' as const : 'inactive' as const,
         lastSync: integration.status === 'connected' ? 'Connected' : 'Not connected',
@@ -234,9 +234,4 @@ function getPlatformDescription(platform: string): string {
     openai: 'Enable AI-powered summarization and insights'
   };
   return descriptions[platform] || '';
-}
-
-function getPlatformIcon(platform: string) {
-  // This will be imported dynamically in the component
-  return null;
 }

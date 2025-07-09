@@ -47,7 +47,7 @@ export const IntegrationsView = () => {
       id: "gmail",
       name: "Gmail",
       description: "Sync emails, threads, and labels from your Gmail account",
-      icon: Mail,
+      icon: "gmail", // Use string identifier instead of component
       connected: false,
       status: "inactive" as const,
       lastSync: "Not connected",
@@ -59,7 +59,7 @@ export const IntegrationsView = () => {
       id: "telegram",
       name: "Telegram",
       description: "Fetch direct messages and group conversations",
-      icon: MessageCircle,
+      icon: "telegram", // Use string identifier instead of component
       connected: false,
       status: "inactive" as const,
       lastSync: "Not connected",
@@ -71,7 +71,7 @@ export const IntegrationsView = () => {
       id: "openai",
       name: "OpenAI",
       description: "Enable AI-powered summarization and insights",
-      icon: Bot,
+      icon: "openai", // Use string identifier instead of component
       connected: false,
       status: "inactive" as const,
       lastSync: "Not connected",
@@ -95,6 +95,16 @@ export const IntegrationsView = () => {
       await disconnectIntegration(platform);
     } else {
       await connectIntegration(platform);
+    }
+  };
+
+  // Helper function to get icon component from platform string
+  const getIconComponent = (platform: string) => {
+    switch (platform) {
+      case 'gmail': return Mail;
+      case 'telegram': return MessageCircle;
+      case 'openai': return Bot;
+      default: return MessageCircle;
     }
   };
 
@@ -126,7 +136,7 @@ export const IntegrationsView = () => {
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Platforms</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {allIntegrations.map((integration) => {
-            const Icon = integration.icon;
+            const Icon = getIconComponent(integration.platform);
             return (
               <Card key={integration.id} className="p-6">
                 <div className="flex items-start justify-between mb-4">
