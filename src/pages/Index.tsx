@@ -7,10 +7,11 @@ import { ConversationView } from "@/components/conversations/ConversationView";
 import { CustomerPanel } from "@/components/customers/CustomerPanel";
 import { ReportsView } from "@/components/reports/ReportsView";
 import { IntegrationsView } from "@/components/integrations/IntegrationsView";
+import type { Conversation } from "@/hooks/useConversations";
 
 const Index = () => {
   const [activeView, setActiveView] = useState("conversations");
-  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [showCustomerPanel, setShowCustomerPanel] = useState(false);
 
   const renderMainContent = () => {

@@ -14,7 +14,255 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_summaries: {
+        Row: {
+          action_items: string[] | null
+          conversation_id: string | null
+          created_at: string | null
+          id: string
+          key_points: string[] | null
+          sentiment: string | null
+          summary: string
+        }
+        Insert: {
+          action_items?: string[] | null
+          conversation_id?: string | null
+          created_at?: string | null
+          id?: string
+          key_points?: string[] | null
+          sentiment?: string | null
+          summary: string
+        }
+        Update: {
+          action_items?: string[] | null
+          conversation_id?: string | null
+          created_at?: string | null
+          id?: string
+          key_points?: string[] | null
+          sentiment?: string | null
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_summaries_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversations: {
+        Row: {
+          created_at: string | null
+          customer_id: string | null
+          id: string
+          is_unread: boolean | null
+          last_message_at: string | null
+          platform: Database["public"]["Enums"]["platform_type"]
+          platform_thread_id: string
+          priority: string | null
+          status: Database["public"]["Enums"]["conversation_status"] | null
+          subject: string | null
+          tags: string[] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          customer_id?: string | null
+          id?: string
+          is_unread?: boolean | null
+          last_message_at?: string | null
+          platform: Database["public"]["Enums"]["platform_type"]
+          platform_thread_id: string
+          priority?: string | null
+          status?: Database["public"]["Enums"]["conversation_status"] | null
+          subject?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          customer_id?: string | null
+          id?: string
+          is_unread?: boolean | null
+          last_message_at?: string | null
+          platform?: Database["public"]["Enums"]["platform_type"]
+          platform_thread_id?: string
+          priority?: string | null
+          status?: Database["public"]["Enums"]["conversation_status"] | null
+          subject?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customers: {
+        Row: {
+          avatar_url: string | null
+          company: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          tags: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          company?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          company?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      integrations: {
+        Row: {
+          access_token: string | null
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          platform: Database["public"]["Enums"]["platform_type"]
+          refresh_token: string | null
+          settings: Json | null
+          status: Database["public"]["Enums"]["integration_status"] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          platform: Database["public"]["Enums"]["platform_type"]
+          refresh_token?: string | null
+          settings?: Json | null
+          status?: Database["public"]["Enums"]["integration_status"] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          platform?: Database["public"]["Enums"]["platform_type"]
+          refresh_token?: string | null
+          settings?: Json | null
+          status?: Database["public"]["Enums"]["integration_status"] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          platform_message_id: string
+          sender_email: string | null
+          sender_name: string | null
+          type: Database["public"]["Enums"]["message_type"] | null
+        }
+        Insert: {
+          content: string
+          conversation_id?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          platform_message_id: string
+          sender_email?: string | null
+          sender_name?: string | null
+          type?: Database["public"]["Enums"]["message_type"] | null
+        }
+        Update: {
+          content?: string
+          conversation_id?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          platform_message_id?: string
+          sender_email?: string | null
+          sender_name?: string | null
+          type?: Database["public"]["Enums"]["message_type"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reports: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          file_url: string | null
+          filters: Json | null
+          id: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          file_url?: string | null
+          filters?: Json | null
+          id?: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          file_url?: string | null
+          filters?: Json | null
+          id?: string
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +271,10 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      conversation_status: "open" | "pending" | "resolved" | "archived"
+      integration_status: "connected" | "disconnected" | "error"
+      message_type: "email" | "chat" | "system"
+      platform_type: "gmail" | "telegram" | "teams"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +401,11 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      conversation_status: ["open", "pending", "resolved", "archived"],
+      integration_status: ["connected", "disconnected", "error"],
+      message_type: ["email", "chat", "system"],
+      platform_type: ["gmail", "telegram", "teams"],
+    },
   },
 } as const

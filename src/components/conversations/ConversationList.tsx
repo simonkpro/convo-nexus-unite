@@ -1,8 +1,8 @@
 
-import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useConversations, type Conversation } from "@/hooks/useConversations";
 import { 
   Mail, 
   MessageCircle, 
@@ -10,65 +10,14 @@ import {
   Clock,
   AlertCircle,
   CheckCircle,
-  Star
+  Star,
+  Loader2
 } from "lucide-react";
 
 interface ConversationListProps {
-  onSelectConversation: (conversation: any) => void;
+  onSelectConversation: (conversation: Conversation) => void;
   selectedId?: string;
 }
-
-// Mock data for conversations
-const mockConversations = [
-  {
-    id: "1",
-    subject: "Product Integration Questions",
-    customer: { name: "Sarah Chen", email: "sarah@acme.com", avatar: "SC" },
-    platform: "gmail",
-    lastMessage: "Thanks for the detailed explanation. Could you also...",
-    timestamp: "2 min ago",
-    unread: true,
-    priority: "high",
-    tags: ["Technical", "Integration"],
-    messageCount: 12
-  },
-  {
-    id: "2",
-    subject: "Billing Issue Resolution",
-    customer: { name: "Mike Johnson", email: "mike@techcorp.com", avatar: "MJ" },
-    platform: "teams",
-    lastMessage: "The payment has been processed successfully.",
-    timestamp: "15 min ago",
-    unread: false,
-    priority: "medium",
-    tags: ["Billing", "Resolved"],
-    messageCount: 6
-  },
-  {
-    id: "3",
-    subject: "Feature Request Discussion",
-    customer: { name: "Alex Rodriguez", email: "alex@startup.io", avatar: "AR" },
-    platform: "telegram",
-    lastMessage: "This feature would really help our workflow...",
-    timestamp: "1 hour ago",
-    unread: true,
-    priority: "low",
-    tags: ["Feature Request"],
-    messageCount: 3
-  },
-  {
-    id: "4",
-    subject: "Onboarding Support",
-    customer: { name: "Emma Wilson", email: "emma@bigcompany.com", avatar: "EW" },
-    platform: "gmail",
-    lastMessage: "Perfect! I'll set up the team training next week.",
-    timestamp: "3 hours ago",
-    unread: false,
-    priority: "medium",
-    tags: ["Onboarding", "Training"],
-    messageCount: 8
-  }
-];
 
 const platformIcons = {
   gmail: Mail,
@@ -82,8 +31,23 @@ const priorityColors = {
   low: "bg-green-100 text-green-800"
 };
 
+const formatTimeAgo = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+  
+  if (diffInMinutes < 1) return 'Just now';
+  if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
+  
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+  
+  const diffInDays = Math.floor(diffInHours / 24);
+  return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+};
+
 export const ConversationList = ({ onSelectConversation, selectedId }: ConversationListProps) => {
-  const [conversations] = useState(mockConversations);
+  const { conversations, loading, error } = useConversations();
 
   return (
     <div className="h-full flex flex-col">
@@ -107,7 +71,23 @@ export const ConversationList = ({ onSelectConversation, selectedId }: Conversat
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {conversations.map((conversation) => {
+        {loading ? (
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            <span className="ml-2 text-gray-500">Loading conversations...</span>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center p-8">
+            <AlertCircle className="h-6 w-6 text-red-400" />
+            <span className="ml-2 text-red-500">Error loading conversations</span>
+          </div>
+        ) : conversations.length === 0 ? (
+          <div className="flex items-center justify-center p-8">
+            <MessageCircle className="h-6 w-6 text-gray-400" />
+            <span className="ml-2 text-gray-500">No conversations yet</span>
+          </div>
+        ) : (
+          conversations.map((conversation) => {
           const PlatformIcon = platformIcons[conversation.platform];
           
           return (
@@ -128,13 +108,13 @@ export const ConversationList = ({ onSelectConversation, selectedId }: Conversat
                   <div className="flex items-center justify-between mb-1">
                     <h3 className={cn(
                       "text-sm font-medium truncate",
-                      conversation.unread ? "text-gray-900" : "text-gray-700"
+                      conversation.is_unread ? "text-gray-900" : "text-gray-700"
                     )}>
                       {conversation.subject}
                     </h3>
                     <div className="flex items-center space-x-1">
                       <PlatformIcon className="w-3 h-3 text-gray-400" />
-                      {conversation.unread && (
+                      {conversation.is_unread && (
                         <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
                       )}
                     </div>
@@ -143,7 +123,7 @@ export const ConversationList = ({ onSelectConversation, selectedId }: Conversat
                   <p className="text-sm text-gray-600 mb-1">{conversation.customer.name}</p>
                   
                   <p className="text-sm text-gray-500 truncate mb-2">
-                    {conversation.lastMessage}
+                    {conversation.latest_message}
                   </p>
                   
                   <div className="flex items-center justify-between">
@@ -155,13 +135,13 @@ export const ConversationList = ({ onSelectConversation, selectedId }: Conversat
                         {conversation.priority}
                       </Badge>
                       <span className="text-xs text-gray-400">
-                        {conversation.messageCount} messages
+                        {conversation.message_count} messages
                       </span>
                     </div>
                     
                     <div className="flex items-center space-x-2">
                       <Clock className="w-3 h-3 text-gray-400" />
-                      <span className="text-xs text-gray-400">{conversation.timestamp}</span>
+                      <span className="text-xs text-gray-400">{formatTimeAgo(conversation.last_message_at)}</span>
                     </div>
                   </div>
                   
@@ -176,7 +156,8 @@ export const ConversationList = ({ onSelectConversation, selectedId }: Conversat
               </div>
             </div>
           );
-        })}
+        })
+        )}
       </div>
     </div>
   );

@@ -3,16 +3,26 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { 
   Search, 
   Bell, 
   Filter, 
   RefreshCw,
-  Plus 
+  Plus,
+  User,
+  LogOut
 } from "lucide-react";
 
 export const TopBar = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const { user, signOut } = useAuth();
 
   return (
     <div className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
@@ -51,6 +61,21 @@ export const TopBar = () => {
           <Plus className="w-4 h-4 mr-2" />
           New Note
         </Button>
+        
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <User className="w-4 h-4 mr-2" />
+              {user?.email?.split('@')[0] || 'User'}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={signOut}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
