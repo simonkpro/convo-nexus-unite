@@ -1,57 +1,21 @@
-
-import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { 
   Mail, 
-  Users, 
   MessageCircle, 
   Bot,
   Settings,
   CheckCircle,
   AlertCircle,
   Plus,
-  ExternalLink
+  Loader2
 } from "lucide-react";
+import { useIntegrations } from "@/hooks/useIntegrations";
 
 export const IntegrationsView = () => {
-  const [integrations, setIntegrations] = useState([
-    {
-      id: "gmail",
-      name: "Gmail",
-      description: "Sync emails, threads, and labels from your Gmail account",
-      icon: Mail,
-      connected: false,
-      status: "inactive",
-      lastSync: "Not connected",
-      messageCount: null,
-      accountEmail: "Not configured"
-    },
-    {
-      id: "telegram",
-      name: "Telegram",
-      description: "Fetch direct messages and group conversations",
-      icon: MessageCircle,
-      connected: false,
-      status: "inactive",
-      lastSync: "Not connected",
-      messageCount: null,
-      accountEmail: "Not configured"
-    },
-    {
-      id: "openai",
-      name: "OpenAI",
-      description: "Enable AI-powered summarization and insights",
-      icon: Bot,
-      connected: false,
-      status: "inactive",
-      lastSync: "Not connected",
-      messageCount: null,
-      accountEmail: "Not configured"
-    }
-  ]);
+  const { integrations, loading, connectIntegration, disconnectIntegration } = useIntegrations();
 
   const availableIntegrations = [
     {
@@ -77,13 +41,70 @@ export const IntegrationsView = () => {
     }
   ];
 
-  const toggleIntegration = (id: string) => {
-    setIntegrations(integrations.map(integration => 
-      integration.id === id 
-        ? { ...integration, connected: !integration.connected, status: integration.connected ? "inactive" : "active" }
-        : integration
-    ));
+  // Create full integrations list including default ones not yet connected
+  const defaultIntegrations = [
+    {
+      id: "gmail",
+      name: "Gmail",
+      description: "Sync emails, threads, and labels from your Gmail account",
+      icon: Mail,
+      connected: false,
+      status: "inactive" as const,
+      lastSync: "Not connected",
+      messageCount: null,
+      accountEmail: "Not configured",
+      platform: "gmail"
+    },
+    {
+      id: "telegram",
+      name: "Telegram",
+      description: "Fetch direct messages and group conversations",
+      icon: MessageCircle,
+      connected: false,
+      status: "inactive" as const,
+      lastSync: "Not connected",
+      messageCount: null,
+      accountEmail: "Not configured",
+      platform: "telegram"
+    },
+    {
+      id: "openai",
+      name: "OpenAI",
+      description: "Enable AI-powered summarization and insights",
+      icon: Bot,
+      connected: false,
+      status: "inactive" as const,
+      lastSync: "Not connected",
+      messageCount: null,
+      accountEmail: "Not configured",
+      platform: "openai"
+    }
+  ];
+
+  // Merge default integrations with fetched ones
+  const allIntegrations = defaultIntegrations.map(defaultInt => {
+    const fetchedInt = integrations.find(int => int.platform === defaultInt.platform);
+    return fetchedInt || defaultInt;
+  });
+
+  const toggleIntegration = async (platform: string) => {
+    const integration = allIntegrations.find(int => int.platform === platform);
+    if (!integration) return;
+
+    if (integration.connected) {
+      await disconnectIntegration(platform);
+    } else {
+      await connectIntegration(platform);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 h-full overflow-y-auto">
@@ -102,9 +123,9 @@ export const IntegrationsView = () => {
 
       {/* Connected Integrations */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Connected Platforms</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Platforms</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {integrations.map((integration) => {
+          {allIntegrations.map((integration) => {
             const Icon = integration.icon;
             return (
               <Card key={integration.id} className="p-6">
@@ -133,7 +154,7 @@ export const IntegrationsView = () => {
                     </Badge>
                     <Switch 
                       checked={integration.connected}
-                      onCheckedChange={() => toggleIntegration(integration.id)}
+                      onCheckedChange={() => toggleIntegration(integration.platform)}
                     />
                   </div>
                 </div>
@@ -148,7 +169,7 @@ export const IntegrationsView = () => {
                       </span>
                     )}
                     <span className="text-gray-500">
-                      Last sync: {integration.lastSync}
+                      Status: {integration.lastSync}
                     </span>
                   </div>
                   <Button variant="outline" size="sm">
@@ -163,7 +184,7 @@ export const IntegrationsView = () => {
 
       {/* Available Integrations */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Integrations</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Coming Soon</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {availableIntegrations.map((integration) => {
             const Icon = integration.icon;
