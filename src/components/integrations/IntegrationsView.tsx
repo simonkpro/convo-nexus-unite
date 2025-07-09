@@ -23,44 +23,33 @@ export const IntegrationsView = () => {
       name: "Gmail",
       description: "Sync emails, threads, and labels from your Gmail account",
       icon: Mail,
-      connected: true,
-      status: "active",
-      lastSync: "2 minutes ago",
-      messageCount: 1247,
-      accountEmail: "support@company.com"
-    },
-    {
-      id: "teams",
-      name: "Microsoft Teams",
-      description: "Import chats and channel conversations from Teams",
-      icon: Users,
-      connected: true,
-      status: "active",
-      lastSync: "5 minutes ago",
-      messageCount: 892,
-      accountEmail: "team@company.com"
+      connected: false,
+      status: "inactive",
+      lastSync: "Not connected",
+      messageCount: null,
+      accountEmail: "Not configured"
     },
     {
       id: "telegram",
       name: "Telegram",
       description: "Fetch direct messages and group conversations",
       icon: MessageCircle,
-      connected: true,
-      status: "active",
-      lastSync: "1 minute ago",
-      messageCount: 445,
-      accountEmail: "@company_support"
+      connected: false,
+      status: "inactive",
+      lastSync: "Not connected",
+      messageCount: null,
+      accountEmail: "Not configured"
     },
     {
       id: "openai",
       name: "OpenAI",
       description: "Enable AI-powered summarization and insights",
       icon: Bot,
-      connected: true,
-      status: "active",
-      lastSync: "Active",
+      connected: false,
+      status: "inactive",
+      lastSync: "Not connected",
       messageCount: null,
-      accountEmail: "GPT-4 API"
+      accountEmail: "Not configured"
     }
   ]);
 
