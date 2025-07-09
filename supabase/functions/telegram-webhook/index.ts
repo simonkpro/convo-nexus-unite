@@ -23,99 +23,28 @@ serve(async (req) => {
       }
     )
 
-    const authHeader = req.headers.get('Authorization')!
-    const token = authHeader.replace('Bearer ', '')
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    
-    if (authError || !user) {
-      console.error('Auth error:', authError)
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
+    const update = await req.json()
+    console.log('Received Telegram webhook:', update)
 
-    const { action } = await req.json()
-
-    if (action === 'sync_chats') {
-      // Get Telegram integration for user
+    // Process the webhook update
+    if (update.message) {
+      const message = update.message
+      const chatId = message.chat.id.toString()
+      
+      // Find the user who owns this bot/integration
       const { data: integration } = await supabase
         .from('integrations')
         .select('*')
-        .eq('user_id', user.id)
         .eq('platform', 'telegram')
         .eq('status', 'connected')
         .single()
 
       if (!integration) {
-        return new Response(JSON.stringify({ error: 'Telegram not connected' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
+        console.log('No telegram integration found')
+        return new Response('OK', { status: 200 })
       }
 
-      const botToken = integration.access_token
-      
-      if (!botToken) {
-        return new Response(JSON.stringify({ error: 'Telegram bot token not configured' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
-
-      // Get recent updates from Telegram
-      console.log('Fetching Telegram updates with bot token:', botToken.substring(0, 10) + '...')
-      const updatesResponse = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?limit=100`)
-      
-      if (!updatesResponse.ok) {
-        const errorText = await updatesResponse.text()
-        console.error('Telegram API error:', updatesResponse.status, errorText)
-        throw new Error(`Telegram API error: ${updatesResponse.status} - ${errorText}`)
-      }
-      
-      const updatesData = await updatesResponse.json()
-      console.log('Telegram API response:', updatesData)
-
-      if (!updatesData.ok) {
-        console.error('Telegram API returned error:', updatesData)
-        throw new Error(`Telegram API error: ${updatesData.description || 'Unknown error'}`)
-      }
-
-      const syncedCount = await syncTelegramMessages(supabase, user.id, botToken, updatesData.result || [])
-
-      return new Response(JSON.stringify({ 
-        success: true, 
-        synced_messages: syncedCount,
-        total_updates: updatesData.result?.length || 0
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
-
-    return new Response(JSON.stringify({ error: 'Invalid action' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
-
-  } catch (error) {
-    console.error('Telegram sync error:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
-  }
-})
-
-async function syncTelegramMessages(supabase: any, userId: string, botToken: string, updates: any[]) {
-  let syncedCount = 0
-
-  for (const update of updates) {
-    try {
-      const message = update.message
-      if (!message) continue
-
-      const chatId = message.chat.id.toString()
+      const userId = integration.user_id
       const messageId = message.message_id.toString()
       
       // Extract sender info
@@ -145,7 +74,7 @@ async function syncTelegramMessages(supabase: any, userId: string, botToken: str
         customer = newCustomer
       }
 
-      // Check if conversation exists
+      // Get or create conversation
       let conversation = null
       const { data: existingConversation } = await supabase
         .from('conversations')
@@ -156,6 +85,14 @@ async function syncTelegramMessages(supabase: any, userId: string, botToken: str
 
       if (existingConversation) {
         conversation = existingConversation
+        // Update last message time
+        await supabase
+          .from('conversations')
+          .update({ 
+            last_message_at: new Date(message.date * 1000).toISOString(),
+            is_unread: true 
+          })
+          .eq('id', conversation.id)
       } else {
         // Create new conversation
         const { data: newConversation } = await supabase
@@ -201,14 +138,13 @@ async function syncTelegramMessages(supabase: any, userId: string, botToken: str
               chat_type: message.chat?.type
             }
           })
-
-        syncedCount++
       }
-
-    } catch (error) {
-      console.error(`Error processing Telegram update:`, error)
     }
-  }
 
-  return syncedCount
-}
+    return new Response('OK', { status: 200 })
+
+  } catch (error) {
+    console.error('Telegram webhook error:', error)
+    return new Response('Internal Server Error', { status: 500 })
+  }
+})

@@ -56,6 +56,7 @@ serve(async (req) => {
       }
 
       // Fetch recent emails from Gmail API
+      console.log('Fetching Gmail messages for user:', user.id)
       const gmailResponse = await fetch(
         'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=50&q=is:unread',
         {
@@ -66,9 +67,17 @@ serve(async (req) => {
         }
       )
 
+      if (!gmailResponse.ok) {
+        const errorText = await gmailResponse.text()
+        console.error('Gmail API error:', gmailResponse.status, errorText)
+        throw new Error(`Gmail API error: ${gmailResponse.status} - ${errorText}`)
+      }
+
       const gmailData = await gmailResponse.json()
+      console.log('Gmail API response:', { messageCount: gmailData.messages?.length || 0 })
       
       if (gmailData.error) {
+        console.error('Gmail API returned error:', gmailData.error)
         throw new Error(`Gmail API error: ${gmailData.error.message}`)
       }
 
