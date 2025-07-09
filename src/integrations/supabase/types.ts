@@ -274,7 +274,7 @@ export type Database = {
       conversation_status: "open" | "pending" | "resolved" | "archived"
       integration_status: "connected" | "disconnected" | "error"
       message_type: "email" | "chat" | "system"
-      platform_type: "gmail" | "telegram" | "teams"
+      platform_type: "gmail" | "telegram" | "teams" | "openai"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -405,7 +405,7 @@ export const Constants = {
       conversation_status: ["open", "pending", "resolved", "archived"],
       integration_status: ["connected", "disconnected", "error"],
       message_type: ["email", "chat", "system"],
-      platform_type: ["gmail", "telegram", "teams"],
+      platform_type: ["gmail", "telegram", "teams", "openai"],
     },
   },
 } as const
