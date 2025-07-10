@@ -18,7 +18,7 @@ interface IntegrationsViewProps {
   onNavigateToTelegram?: () => void;
 }
 
-export const IntegrationsView = ({ onNavigateToTelegram }: IntegrationsViewProps = {}) => {
+export const IntegrationsView = ({ onNavigateToTelegram }: IntegrationsViewProps) => {
   const { integrations, loading, connectIntegration, disconnectIntegration, syncGmail, syncTelegram, generateSummary } = useIntegrations();
 
   const availableIntegrations = [
