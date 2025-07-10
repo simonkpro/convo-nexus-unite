@@ -14,7 +14,11 @@ import {
 } from "lucide-react";
 import { useIntegrations } from "@/hooks/useIntegrations";
 
-export const IntegrationsView = () => {
+interface IntegrationsViewProps {
+  onNavigateToTelegram?: () => void;
+}
+
+export const IntegrationsView = ({ onNavigateToTelegram }: IntegrationsViewProps = {}) => {
   const { integrations, loading, connectIntegration, disconnectIntegration, syncGmail, syncTelegram, generateSummary } = useIntegrations();
 
   const availableIntegrations = [
@@ -94,6 +98,10 @@ export const IntegrationsView = () => {
     if (integration.connected) {
       await disconnectIntegration(platform);
     } else {
+      if (platform === 'telegram') {
+        onNavigateToTelegram?.();
+        return;
+      }
       await connectIntegration(platform);
     }
   };

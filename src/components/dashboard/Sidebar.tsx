@@ -8,7 +8,8 @@ import {
   Users, 
   Inbox,
   Zap,
-  Shield
+  Shield,
+  Send
 } from "lucide-react";
 
 interface SidebarProps {
@@ -22,6 +23,7 @@ export const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
     { id: "customers", label: "Customers", icon: Users },
     { id: "reports", label: "Reports", icon: BarChart3 },
     { id: "integrations", label: "Integrations", icon: Zap },
+    { id: "telegram", label: "Telegram", icon: Send },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 

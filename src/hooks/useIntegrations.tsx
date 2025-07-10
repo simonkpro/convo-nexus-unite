@@ -100,8 +100,8 @@ export const useIntegrations = () => {
   };
 
   const connectTelegram = async () => {
-    // MTProto connection is handled by the TelegramLogin component
-    toast.info('Please use the Telegram MTProto login interface');
+    // Navigate to Telegram MTProto interface
+    window.dispatchEvent(new CustomEvent('navigate-to-telegram'));
   };
 
   const syncTelegram = async () => {

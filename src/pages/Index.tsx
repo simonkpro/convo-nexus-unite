@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import React from "react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { ConversationList } from "@/components/conversations/ConversationList";
@@ -7,12 +8,23 @@ import { ConversationView } from "@/components/conversations/ConversationView";
 import { CustomerPanel } from "@/components/customers/CustomerPanel";
 import { ReportsView } from "@/components/reports/ReportsView";
 import { IntegrationsView } from "@/components/integrations/IntegrationsView";
+import { TelegramMTProtoView } from "@/components/telegram/TelegramMTProtoView";
 import type { Conversation } from "@/hooks/useConversations";
 
 const Index = () => {
   const [activeView, setActiveView] = useState("conversations");
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [showCustomerPanel, setShowCustomerPanel] = useState(false);
+
+  // Listen for navigation events
+  React.useEffect(() => {
+    const handleNavigateToTelegram = () => {
+      setActiveView("telegram");
+    };
+
+    window.addEventListener('navigate-to-telegram', handleNavigateToTelegram);
+    return () => window.removeEventListener('navigate-to-telegram', handleNavigateToTelegram);
+  }, []);
 
   const renderMainContent = () => {
     switch (activeView) {
@@ -36,7 +48,9 @@ const Index = () => {
       case "reports":
         return <ReportsView />;
       case "integrations":
-        return <IntegrationsView />;
+        return <IntegrationsView onNavigateToTelegram={() => setActiveView("telegram")} />;
+      case "telegram":
+        return <TelegramMTProtoView />;
       default:
         return <div>View not found</div>;
     }
