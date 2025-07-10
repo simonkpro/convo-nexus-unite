@@ -1,13 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
-import CryptoJS from 'crypto-js';
-import BigInteger from 'big-integer';
+import { supabase } from '@/integrations/supabase/client';
 
 // Types
 interface TelegramSession {
   isLoggedIn: boolean;
   phoneNumber?: string;
   sessionString?: string;
+  authKey?: string;
 }
 
 interface TelegramChat {
@@ -31,377 +31,39 @@ interface TelegramChat {
   }>;
 }
 
-// Simple MTProto-like implementation for browser
-class SimpleMTProtoClient {
-  private apiId: number;
-  private apiHash: string;
-  private sessionData: any = null;
-  private authKey: string | null = null;
-
-  constructor(apiId: number, apiHash: string) {
-    this.apiId = apiId;
-    this.apiHash = apiHash;
-  }
-
-  // Initialize connection
-  async connect(): Promise<boolean> {
-    try {
-      // Simulate connection process
-      await this.simulateDelay(1000);
-      return true;
-    } catch (error) {
-      console.error('Connection failed:', error);
-      return false;
-    }
-  }
-
-  // Send auth code request
-  async sendCode(phoneNumber: string): Promise<{ phoneCodeHash: string }> {
-    try {
-      // Simulate API call to Telegram servers
-      await this.simulateDelay(1500);
-      
-      // In a real implementation, this would make an HTTP request to Telegram's API
-      const response = await this.makeApiCall('auth.sendCode', {
-        phone_number: phoneNumber,
-        api_id: this.apiId,
-        api_hash: this.apiHash,
-        settings: {
-          allow_flashcall: false,
-          current_number: false,
-          allow_app_hash: true
-        }
-      });
-
-      return {
-        phoneCodeHash: response.phone_code_hash || this.generateHash()
-      };
-    } catch (error) {
-      throw new Error('Failed to send verification code');
-    }
-  }
-
-  // Sign in with phone code
-  async signIn(phoneNumber: string, phoneCodeHash: string, phoneCode: string): Promise<any> {
-    try {
-      await this.simulateDelay(1000);
-      
-      const response = await this.makeApiCall('auth.signIn', {
-        phone_number: phoneNumber,
-        phone_code_hash: phoneCodeHash,
-        phone_code: phoneCode
-      });
-
-      if (response.success) {
-        this.sessionData = {
-          user_id: response.user?.id || Date.now(),
-          auth_key: this.generateAuthKey(),
-          phone_number: phoneNumber
-        };
-        this.authKey = this.sessionData.auth_key;
-        return response;
-      } else if (response.error === 'SESSION_PASSWORD_NEEDED') {
-        throw new Error('2FA_REQUIRED');
-      } else {
-        throw new Error('Invalid verification code');
-      }
-    } catch (error) {
-      if (error.message === '2FA_REQUIRED') {
-        throw error;
-      }
-      throw new Error('Authentication failed');
-    }
-  }
-
-  // Handle 2FA
-  async checkPassword(password: string): Promise<any> {
-    try {
-      await this.simulateDelay(1000);
-      
-      const response = await this.makeApiCall('auth.checkPassword', {
-        password: this.hashPassword(password)
-      });
-
-      if (response.success) {
-        this.sessionData = {
-          user_id: response.user?.id || Date.now(),
-          auth_key: this.generateAuthKey(),
-          phone_number: this.sessionData?.phone_number
-        };
-        this.authKey = this.sessionData.auth_key;
-        return response;
-      } else {
-        throw new Error('Invalid 2FA password');
-      }
-    } catch (error) {
-      throw new Error('2FA verification failed');
-    }
-  }
-
-  // Get dialogs (chats)
-  async getDialogs(limit: number = 50): Promise<any> {
-    if (!this.authKey) {
-      throw new Error('Not authenticated');
-    }
-
-    try {
-      await this.simulateDelay(1500);
-      
-      const response = await this.makeApiCall('messages.getDialogs', {
-        offset_date: 0,
-        offset_id: 0,
-        offset_peer: { _: 'inputPeerEmpty' },
-        limit: limit,
-        hash: 0
-      });
-
-      return response;
-    } catch (error) {
-      throw new Error('Failed to fetch dialogs');
-    }
-  }
-
-  // Get messages for a chat
-  async getHistory(peerId: string, limit: number = 20): Promise<any> {
-    if (!this.authKey) {
-      throw new Error('Not authenticated');
-    }
-
-    try {
-      await this.simulateDelay(1000);
-      
-      const response = await this.makeApiCall('messages.getHistory', {
-        peer: { _: 'inputPeerUser', user_id: peerId, access_hash: 0 },
-        offset_id: 0,
-        offset_date: 0,
-        add_offset: 0,
-        limit: limit,
-        max_id: 0,
-        min_id: 0,
-        hash: 0
-      });
-
-      return response;
-    } catch (error) {
-      throw new Error('Failed to fetch message history');
-    }
-  }
-
-  // Logout
-  async logOut(): Promise<void> {
-    try {
-      if (this.authKey) {
-        await this.makeApiCall('auth.logOut', {});
-      }
-      this.sessionData = null;
-      this.authKey = null;
-    } catch (error) {
-      // Ignore logout errors
-      console.warn('Logout error:', error);
-    }
-  }
-
-  // Check if authenticated
-  isAuthenticated(): boolean {
-    return !!this.authKey && !!this.sessionData;
-  }
-
-  // Get session string
-  getSessionString(): string {
-    return this.sessionData ? JSON.stringify(this.sessionData) : '';
-  }
-
-  // Restore from session string
-  restoreSession(sessionString: string): boolean {
-    try {
-      this.sessionData = JSON.parse(sessionString);
-      this.authKey = this.sessionData?.auth_key;
-      return this.isAuthenticated();
-    } catch (error) {
-      return false;
-    }
-  }
-
-  // Private helper methods
-  private async simulateDelay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  private generateHash(): string {
-    return CryptoJS.SHA256(Date.now().toString() + Math.random().toString()).toString();
-  }
-
-  private generateAuthKey(): string {
-    return CryptoJS.SHA256(Date.now().toString() + this.apiId + this.apiHash).toString();
-  }
-
-  private hashPassword(password: string): string {
-    return CryptoJS.SHA256(password + this.apiHash).toString();
-  }
-
-  // Simulate API calls to Telegram servers
-  private async makeApiCall(method: string, params: any): Promise<any> {
-    // In a real implementation, this would make actual HTTP requests to Telegram's API
-    // For now, we'll simulate the responses based on the method
-    
-    switch (method) {
-      case 'auth.sendCode':
-        // Simulate successful code send
-        return {
-          _: 'auth.sentCode',
-          phone_code_hash: this.generateHash(),
-          type: { _: 'auth.sentCodeTypeSms', length: 5 }
-        };
-
-      case 'auth.signIn':
-        // Simulate different scenarios
-        const { phone_code } = params;
-        if (phone_code === '12345') {
-          // 2FA required
-          return { error: 'SESSION_PASSWORD_NEEDED' };
-        } else if (phone_code && phone_code.length === 5) {
-          // Successful login
-          return {
-            success: true,
-            user: {
-              id: Date.now(),
-              first_name: 'Demo User',
-              phone: params.phone_number
-            }
-          };
-        } else {
-          // Invalid code
-          return { success: false, error: 'PHONE_CODE_INVALID' };
-        }
-
-      case 'auth.checkPassword':
-        // Simulate 2FA verification
-        return {
-          success: true,
-          user: {
-            id: Date.now(),
-            first_name: 'Demo User',
-            phone: this.sessionData?.phone_number
-          }
-        };
-
-      case 'messages.getDialogs':
-        // Return simulated chat data
-        return {
-          dialogs: [
-            {
-              peer: { _: 'peerUser', user_id: 1 },
-              top_message: 101,
-              unread_count: 2,
-              pts: 1,
-              draft: null
-            },
-            {
-              peer: { _: 'peerChat', chat_id: 2 },
-              top_message: 201,
-              unread_count: 5,
-              pts: 1,
-              draft: null
-            },
-            {
-              peer: { _: 'peerChannel', channel_id: 3 },
-              top_message: 301,
-              unread_count: 0,
-              pts: 1,
-              draft: null
-            }
-          ],
-          users: [
-            {
-              id: 1,
-              first_name: 'John',
-              last_name: 'Doe',
-              username: 'johndoe',
-              phone: '+1234567890',
-              _: 'user'
-            }
-          ],
-          chats: [
-            {
-              id: 2,
-              title: 'Design Team',
-              participants_count: 15,
-              _: 'chat'
-            },
-            {
-              id: 3,
-              title: 'Tech News',
-              username: 'technews',
-              participants_count: 1000,
-              _: 'channel'
-            }
-          ],
-          messages: [
-            {
-              id: 101,
-              from_id: { _: 'peerUser', user_id: 1 },
-              message: 'Hey, how are you doing?',
-              date: Math.floor(Date.now() / 1000) - 1800 // 30 minutes ago
-            },
-            {
-              id: 201,
-              from_id: { _: 'peerUser', user_id: 4 },
-              message: 'The new mockups are ready for review',
-              date: Math.floor(Date.now() / 1000) - 3600 // 1 hour ago
-            },
-            {
-              id: 301,
-              from_id: { _: 'peerChannel', channel_id: 3 },
-              message: 'Breaking: New JavaScript framework announced',
-              date: Math.floor(Date.now() / 1000) - 900 // 15 minutes ago
-            }
-          ]
-        };
-
-      case 'messages.getHistory':
-        // Return simulated message history
-        return {
-          messages: [
-            {
-              id: 102,
-              from_id: { _: 'peerUser', user_id: 1 },
-              message: 'Thanks for the help yesterday!',
-              date: Math.floor(Date.now() / 1000) - 7200 // 2 hours ago
-            },
-            {
-              id: 101,
-              from_id: { _: 'peerUser', user_id: 1 },
-              message: 'Hey, how are you doing?',
-              date: Math.floor(Date.now() / 1000) - 1800 // 30 minutes ago
-            }
-          ],
-          users: [
-            {
-              id: 1,
-              first_name: 'John',
-              last_name: 'Doe',
-              username: 'johndoe'
-            }
-          ]
-        };
-
-      case 'auth.logOut':
-        return { _: 'auth.loggedOut' };
-
-      default:
-        throw new Error(`Unknown method: ${method}`);
-    }
-  }
-}
-
-// Main hook implementation
 export const useTelegramMTProto = () => {
   const [session, setSession] = useState<TelegramSession>({ isLoggedIn: false });
   const [chats, setChats] = useState<TelegramChat[]>([]);
   const [loading, setLoading] = useState(false);
   const [loginStep, setLoginStep] = useState<'phone' | 'code' | '2fa' | 'complete'>('phone');
-  const [client, setClient] = useState<SimpleMTProtoClient | null>(null);
   const [phoneCodeHash, setPhoneCodeHash] = useState<string>('');
+
+  // Call the Telegram MTProto edge function
+  const callTelegramAPI = async (method: string, params: any) => {
+    try {
+      console.log('Calling Telegram API:', method, params);
+      
+      const { data, error } = await supabase.functions.invoke('telegram-mtproto', {
+        body: { method, params }
+      });
+
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw new Error(error.message || 'API call failed');
+      }
+
+      if (!data.success) {
+        console.error('Telegram API error:', data.error);
+        throw new Error(data.error || 'Telegram API call failed');
+      }
+
+      console.log('Telegram API success:', data.result);
+      return data.result;
+    } catch (error) {
+      console.error('Error calling Telegram API:', error);
+      throw error;
+    }
+  };
 
   // Initialize client
   const initializeClient = useCallback(async (apiId: number, apiHash: string, sessionString?: string) => {
@@ -412,38 +74,32 @@ export const useTelegramMTProto = () => {
       localStorage.setItem('telegram_api_id', apiId.toString());
       localStorage.setItem('telegram_api_hash', apiHash);
 
-      const mtprotoClient = new SimpleMTProtoClient(apiId, apiHash);
-      
-      // Try to connect
-      const connected = await mtprotoClient.connect();
-      if (!connected) {
-        throw new Error('Failed to connect to Telegram');
-      }
-
-      setClient(mtprotoClient);
-
       // Check if we have a saved session
       if (sessionString) {
-        const restored = mtprotoClient.restoreSession(sessionString);
-        if (restored) {
-          setSession({
-            isLoggedIn: true,
-            sessionString,
-          });
-          setLoginStep('complete');
-          toast.success('Session restored successfully!');
-          return mtprotoClient;
-        } else {
+        try {
+          const sessionData = JSON.parse(sessionString);
+          if (sessionData.isLoggedIn && sessionData.authKey) {
+            setSession({
+              isLoggedIn: true,
+              sessionString,
+              phoneNumber: sessionData.phoneNumber,
+              authKey: sessionData.authKey
+            });
+            setLoginStep('complete');
+            toast.success('Session restored successfully!');
+            return true;
+          }
+        } catch (error) {
           console.log('Session invalid, need to login again');
           localStorage.removeItem('telegram_session');
         }
       }
 
-      return mtprotoClient;
+      return true;
     } catch (error) {
       console.error('Failed to initialize Telegram client:', error);
       toast.error('Failed to initialize Telegram client');
-      return null;
+      return false;
     } finally {
       setLoading(false);
     }
@@ -454,151 +110,250 @@ export const useTelegramMTProto = () => {
     try {
       setLoading(true);
       
-      let mtprotoClient = client;
-      if (!mtprotoClient) {
-        mtprotoClient = await initializeClient(apiId, apiHash);
-        if (!mtprotoClient) return;
+      // Validate input
+      if (!apiId || !apiHash || !phoneNumber) {
+        toast.error('Please provide API ID, API Hash, and phone number');
+        return;
       }
 
-      const result = await mtprotoClient.sendCode(phoneNumber);
-      setPhoneCodeHash(result.phoneCodeHash);
+      console.log('Sending phone number to Telegram API...');
+      
+      const result = await callTelegramAPI('sendCode', {
+        api_id: apiId,
+        api_hash: apiHash,
+        phone_number: phoneNumber
+      });
+
+      console.log('Phone code sent successfully:', result);
+      
+      // Extract phone code hash from response
+      const codeHash = result.phone_code_hash || result.phoneCodeHash;
+      if (!codeHash) {
+        throw new Error('No phone code hash received from Telegram');
+      }
+
+      setPhoneCodeHash(codeHash);
       setSession(prev => ({ ...prev, phoneNumber }));
       setLoginStep('code');
-      toast.success('Verification code sent to Telegram!');
+      toast.success('Verification code sent to your Telegram app!');
+      
     } catch (error: any) {
       console.error('Error sending phone number:', error);
-      toast.error(error.message || 'Failed to send verification code');
+      
+      // Handle specific Telegram API errors
+      let errorMessage = 'Failed to send verification code';
+      if (error.message?.includes('PHONE_NUMBER_INVALID')) {
+        errorMessage = 'Invalid phone number format';
+      } else if (error.message?.includes('API_ID_INVALID')) {
+        errorMessage = 'Invalid API ID - check your credentials';
+      } else if (error.message?.includes('API_HASH_INVALID')) {
+        errorMessage = 'Invalid API Hash - check your credentials';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [client, initializeClient]);
+  }, []);
 
   // Verify phone code
   const verifyPhoneCode = useCallback(async (code: string) => {
     try {
       setLoading(true);
       
-      if (!client || !phoneCodeHash || !session.phoneNumber) {
+      if (!phoneCodeHash || !session.phoneNumber) {
         toast.error('Missing authentication data');
         return;
       }
 
+      const apiId = localStorage.getItem('telegram_api_id');
+      const apiHash = localStorage.getItem('telegram_api_hash');
+      
+      if (!apiId || !apiHash) {
+        toast.error('Missing API credentials');
+        return;
+      }
+
+      console.log('Verifying phone code...');
+
       try {
-        const result = await client.signIn(session.phoneNumber, phoneCodeHash, code);
+        const result = await callTelegramAPI('signIn', {
+          api_id: parseInt(apiId),
+          api_hash: apiHash,
+          phone_number: session.phoneNumber,
+          phone_code_hash: phoneCodeHash,
+          phone_code: code
+        });
+
+        console.log('Sign in successful:', result);
+        
+        // Generate auth key from result
+        const authKey = result.session?.auth_key || `auth_${Date.now()}`;
         
         // Save session data
-        const sessionData = client.getSessionString();
-        localStorage.setItem('telegram_session', sessionData);
+        const sessionData = {
+          isLoggedIn: true,
+          phoneNumber: session.phoneNumber,
+          authKey: authKey,
+          user: result.user
+        };
+        
+        const sessionString = JSON.stringify(sessionData);
+        localStorage.setItem('telegram_session', sessionString);
 
         setSession({
           isLoggedIn: true,
           phoneNumber: session.phoneNumber,
-          sessionString: sessionData,
+          sessionString: sessionString,
+          authKey: authKey
         });
         setLoginStep('complete');
         toast.success('Successfully logged in to Telegram!');
         
         // Load chats
-        await loadChats(client);
+        setTimeout(() => {
+          fetchChats();
+        }, 1000);
+
       } catch (error: any) {
-        if (error.message === '2FA_REQUIRED') {
+        console.error('Sign in error:', error);
+        
+        if (error.message?.includes('SESSION_PASSWORD_NEEDED') || 
+            error.message?.includes('2FA')) {
           setLoginStep('2fa');
           toast.info('Please enter your 2FA password');
+        } else if (error.message?.includes('PHONE_CODE_INVALID')) {
+          toast.error('Invalid verification code');
+        } else if (error.message?.includes('PHONE_CODE_EXPIRED')) {
+          toast.error('Verification code expired - please request a new one');
+          setLoginStep('phone');
         } else {
-          throw error;
+          toast.error(error.message || 'Verification failed');
         }
       }
     } catch (error: any) {
       console.error('Error verifying code:', error);
-      toast.error(error.message || 'Invalid verification code');
+      toast.error('Verification failed');
     } finally {
       setLoading(false);
     }
-  }, [client, phoneCodeHash, session.phoneNumber]);
+  }, [phoneCodeHash, session.phoneNumber]);
 
   // Verify 2FA password
   const verify2FA = useCallback(async (password: string) => {
     try {
       setLoading(true);
       
-      if (!client) {
-        toast.error('No active session');
+      const apiId = localStorage.getItem('telegram_api_id');
+      const apiHash = localStorage.getItem('telegram_api_hash');
+      
+      if (!apiId || !apiHash) {
+        toast.error('Missing API credentials');
         return;
       }
 
-      const result = await client.checkPassword(password);
+      console.log('Verifying 2FA password...');
+
+      const result = await callTelegramAPI('checkPassword', {
+        api_id: parseInt(apiId),
+        api_hash: apiHash,
+        password: password
+      });
+
+      console.log('2FA verification successful:', result);
+      
+      // Generate auth key from result
+      const authKey = result.session?.auth_key || `auth_${Date.now()}`;
       
       // Save session data
-      const sessionData = client.getSessionString();
-      localStorage.setItem('telegram_session', sessionData);
+      const sessionData = {
+        isLoggedIn: true,
+        phoneNumber: session.phoneNumber,
+        authKey: authKey,
+        user: result.user
+      };
+      
+      const sessionString = JSON.stringify(sessionData);
+      localStorage.setItem('telegram_session', sessionString);
 
       setSession({
         isLoggedIn: true,
         phoneNumber: session.phoneNumber,
-        sessionString: sessionData,
+        sessionString: sessionString,
+        authKey: authKey
       });
       setLoginStep('complete');
       toast.success('Successfully logged in with 2FA!');
       
       // Load chats
-      await loadChats(client);
+      setTimeout(() => {
+        fetchChats();
+      }, 1000);
+
     } catch (error: any) {
       console.error('Error verifying 2FA:', error);
-      toast.error(error.message || 'Invalid 2FA password');
+      
+      if (error.message?.includes('PASSWORD_HASH_INVALID')) {
+        toast.error('Invalid 2FA password');
+      } else {
+        toast.error(error.message || 'Invalid 2FA password');
+      }
     } finally {
       setLoading(false);
     }
-  }, [client, session.phoneNumber]);
+  }, [session.phoneNumber]);
 
-  // Load chats from Telegram
-  const loadChats = async (mtprotoClient: SimpleMTProtoClient) => {
+  // Fetch chats
+  const fetchChats = useCallback(async () => {
     try {
-      const dialogs = await mtprotoClient.getDialogs(50);
-      const chatList: TelegramChat[] = [];
+      setLoading(true);
+      
+      if (!session.isLoggedIn || !session.authKey) {
+        toast.error('Not logged in to Telegram');
+        return;
+      }
 
-      // Process dialogs
-      if (dialogs.dialogs) {
-        for (const dialog of dialogs.dialogs) {
-          let peer, peerData;
-          
-          // Find the corresponding peer data
-          if (dialog.peer._ === 'peerUser') {
-            peerData = dialogs.users?.find((u: any) => u.id === dialog.peer.user_id);
-            peer = peerData;
-          } else if (dialog.peer._ === 'peerChat') {
-            peerData = dialogs.chats?.find((c: any) => c.id === dialog.peer.chat_id);
-            peer = peerData;
-          } else if (dialog.peer._ === 'peerChannel') {
-            peerData = dialogs.chats?.find((c: any) => c.id === dialog.peer.channel_id);
-            peer = peerData;
+      const apiId = localStorage.getItem('telegram_api_id');
+      const apiHash = localStorage.getItem('telegram_api_hash');
+      
+      if (!apiId || !apiHash) {
+        toast.error('Missing API credentials');
+        return;
+      }
+
+      console.log('Fetching chats from Telegram...');
+
+      const result = await callTelegramAPI('getDialogs', {
+        api_id: parseInt(apiId),
+        api_hash: apiHash,
+        auth_key: session.authKey,
+        limit: 50
+      });
+
+      console.log('Dialogs fetched:', result);
+      
+      // Process the dialogs into our chat format
+      const chatList: TelegramChat[] = [];
+      
+      if (result.dialogs && result.dialogs.length > 0) {
+        for (const dialog of result.dialogs) {
+          // Find corresponding peer data
+          let peer;
+          if (dialog.peer?._=== 'peerUser') {
+            peer = result.users?.find((u: any) => u.id === dialog.peer.user_id);
+          } else if (dialog.peer?._=== 'peerChat') {
+            peer = result.chats?.find((c: any) => c.id === dialog.peer.chat_id);
+          } else if (dialog.peer?._=== 'peerChannel') {
+            peer = result.chats?.find((c: any) => c.id === dialog.peer.channel_id);
           }
 
           if (peer) {
-            // Find the last message
-            const lastMsg = dialogs.messages?.find((m: any) => m.id === dialog.top_message);
+            const lastMsg = result.messages?.find((m: any) => m.id === dialog.top_message);
             
-            // Get recent messages for this chat
-            let recentMessages: any[] = [];
-            try {
-              const history = await mtprotoClient.getHistory(peer.id.toString(), 5);
-              recentMessages = history.messages?.map((msg: any) => {
-                const sender = history.users?.find((u: any) => u.id === msg.from_id?.user_id) || 
-                              { first_name: 'Unknown', last_name: '' };
-                
-                return {
-                  id: msg.id,
-                  text: msg.message || '[Media]',
-                  date: new Date(msg.date * 1000),
-                  sender: `${sender.first_name} ${sender.last_name}`.trim(),
-                  senderId: msg.from_id?.user_id?.toString() || 'unknown'
-                };
-              }) || [];
-            } catch (error) {
-              console.warn('Failed to load messages for chat:', peer.id);
-            }
-
             chatList.push({
-              id: peer.id.toString(),
+              id: peer.id?.toString() || 'unknown',
               title: peer.title || `${peer.first_name || ''} ${peer.last_name || ''}`.trim() || 'Unknown',
               type: peer._ === 'user' ? 'private' : 
                     peer._ === 'channel' ? 'channel' : 'group',
@@ -609,7 +364,7 @@ export const useTelegramMTProto = () => {
                 sender: 'Sender'
               } : undefined,
               unreadCount: dialog.unread_count || 0,
-              recentMessages
+              recentMessages: [] // Will be populated when viewing individual chats
             });
           }
         }
@@ -617,40 +372,20 @@ export const useTelegramMTProto = () => {
 
       setChats(chatList);
       toast.success(`Loaded ${chatList.length} chats from Telegram`);
-    } catch (error) {
-      console.error('Error loading chats:', error);
-      toast.error('Failed to load chats from Telegram');
-    }
-  };
-
-  // Fetch chats
-  const fetchChats = useCallback(async () => {
-    try {
-      setLoading(true);
       
-      if (!client || !session.isLoggedIn) {
-        toast.error('Not logged in to Telegram');
-        return;
-      }
-
-      await loadChats(client);
     } catch (error: any) {
       console.error('Error fetching chats:', error);
-      toast.error('Failed to fetch chats');
+      toast.error(error.message || 'Failed to fetch chats');
     } finally {
       setLoading(false);
     }
-  }, [client, session.isLoggedIn]);
+  }, [session.isLoggedIn, session.authKey]);
 
   // Logout
   const logout = useCallback(async () => {
     try {
       setLoading(true);
       
-      if (client) {
-        await client.logOut();
-      }
-
       // Clear all stored data
       localStorage.removeItem('telegram_session');
       localStorage.removeItem('telegram_api_id');
@@ -658,7 +393,6 @@ export const useTelegramMTProto = () => {
       
       setSession({ isLoggedIn: false });
       setChats([]);
-      setClient(null);
       setPhoneCodeHash('');
       setLoginStep('phone');
       
@@ -669,7 +403,7 @@ export const useTelegramMTProto = () => {
     } finally {
       setLoading(false);
     }
-  }, [client]);
+  }, []);
 
   // Load saved session on mount
   useEffect(() => {
@@ -680,7 +414,7 @@ export const useTelegramMTProto = () => {
     if (savedSession && savedApiId && savedApiHash) {
       try {
         const sessionData = JSON.parse(savedSession);
-        if (sessionData) {
+        if (sessionData.isLoggedIn) {
           initializeClient(parseInt(savedApiId), savedApiHash, savedSession);
         }
       } catch (error) {
