@@ -100,37 +100,13 @@ export const useIntegrations = () => {
   };
 
   const connectTelegram = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('telegram-setup', {
-        body: { action: 'setup_bot' }
-      });
-
-      if (error) throw error;
-
-      toast.success(`Telegram bot @${data.bot_username} connected successfully!`);
-      fetchIntegrations();
-    } catch (error) {
-      console.error('Telegram connection error:', error);
-      toast.error('Failed to connect Telegram bot');
-    }
+    // MTProto connection is handled by the TelegramLogin component
+    toast.info('Please use the Telegram MTProto login interface');
   };
 
   const syncTelegram = async () => {
-    try {
-      toast.loading('Syncing Telegram chats...');
-      
-      const { data, error } = await supabase.functions.invoke('telegram-sync', {
-        body: { action: 'sync_chats' }
-      });
-
-      if (error) throw error;
-
-      toast.success(`Synced ${data.synced_messages} new messages from Telegram!`);
-      return data;
-    } catch (error) {
-      console.error('Telegram sync error:', error);
-      toast.error('Failed to sync Telegram messages');
-    }
+    // MTProto sync is handled by the TelegramChats component
+    toast.info('Use the refresh button in the Telegram chats interface');
   };
 
   const connectOpenAI = async () => {
@@ -230,7 +206,7 @@ function getPlatformName(platform: string): string {
 function getPlatformDescription(platform: string): string {
   const descriptions: Record<string, string> = {
     gmail: 'Sync emails, threads, and labels from your Gmail account',
-    telegram: 'Fetch direct messages and group conversations',
+    telegram: 'Connect using MTProto to access all your chats and messages',
     openai: 'Enable AI-powered summarization and insights'
   };
   return descriptions[platform] || '';
