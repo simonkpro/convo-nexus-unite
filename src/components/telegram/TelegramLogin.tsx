@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,14 @@ export const TelegramLogin = ({ onLoginComplete }: TelegramLoginProps) => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [twoFAPassword, setTwoFAPassword] = useState('');
+  
+  // Load saved credentials on mount
+  useEffect(() => {
+    const savedApiId = localStorage.getItem('telegram_api_id');
+    const savedApiHash = localStorage.getItem('telegram_api_hash');
+    if (savedApiId) setApiId(savedApiId);
+    if (savedApiHash) setApiHash(savedApiHash);
+  }, []);
   
   const {
     loading,
