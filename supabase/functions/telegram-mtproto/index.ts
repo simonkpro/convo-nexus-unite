@@ -52,25 +52,16 @@ class TelegramMTProto {
     try {
       await this.client.connect();
       
-      const result = await this.client.api.auth.sendCode({
-        phoneNumber: phoneNumber,
-        apiId: this.apiId,
-        apiHash: this.apiHash,
-        settings: {
-          _: "codeSettings",
-          allowFlashcall: false,
-          currentNumber: false,
-          allowAppHash: true,
-        },
-      });
+      // Use MTKruto's sendCode method
+      const result = await this.client.sendCode(phoneNumber);
 
       console.log('Telegram API response:', result);
       
       return {
         phoneCodeHash: result.phoneCodeHash,
         phoneNumber: phoneNumber,
-        isRegistered: result.phoneRegistered,
-        nextType: result.nextType?._,
+        isRegistered: result.phoneRegistered || false,
+        nextType: result.nextType || 'sms',
         timeout: result.timeout || 60,
       };
     } catch (error) {
@@ -87,15 +78,12 @@ class TelegramMTProto {
     console.log('Signing in with Telegram:', { phoneNumber, phoneCodeHash });
 
     try {
-      const result = await this.client.api.auth.signIn({
-        phoneNumber: phoneNumber,
-        phoneCodeHash: phoneCodeHash,
-        phoneCode: phoneCode,
-      });
+      // Use MTKruto's signIn method
+      const result = await this.client.signIn(phoneCodeHash, phoneCode);
 
       console.log('Sign in response:', result);
       
-      if (result._ === 'auth.authorization') {
+      if (result.user) {
         // Successfully logged in
         const authString = await this.client.exportAuthString();
         return {
@@ -104,16 +92,14 @@ class TelegramMTProto {
           sessionString: authString,
           authKey: authString,
         };
-      } else if (result._ === 'auth.authorizationSignUpRequired') {
-        throw new Error('Account registration required');
       } else {
-        throw new Error('Unexpected response from Telegram');
+        throw new Error('Sign in failed');
       }
     } catch (error: any) {
       console.error('Error signing in:', error);
       
       // Check if 2FA is required
-      if (error.message && error.message.includes('SESSION_PASSWORD_NEEDED')) {
+      if (error.message && (error.message.includes('SESSION_PASSWORD_NEEDED') || error.message.includes('password'))) {
         return {
           requires2FA: true,
           hint: error.hint || 'Enter your 2FA password',
@@ -130,12 +116,10 @@ class TelegramMTProto {
     }
 
     try {
-      // Use MTKruto's built-in 2FA password verification
-      const result = await this.client.api.auth.checkPassword({
-        password: await this.client.checkPassword(password)
-      });
+      // Use MTKruto's checkPassword method for 2FA
+      const result = await this.client.checkPassword(password);
 
-      if (result._ === 'auth.authorization') {
+      if (result.user) {
         const authString = await this.client.exportAuthString();
         return {
           success: true,
