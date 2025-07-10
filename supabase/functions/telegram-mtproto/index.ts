@@ -1,55 +1,84 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { Api, TelegramApi } from "https://deno.land/x/gramjs@v2.17.19/mod.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// MTProto implementation for Deno
+// Store active clients
+const clients = new Map<string, TelegramApi>();
+
+// MTProto implementation using gramjs
 class TelegramMTProto {
   private apiId: number;
   private apiHash: string;
-  private baseUrl = 'https://api.telegram.org';
+  private client: TelegramApi | null = null;
+  private sessionKey: string;
 
-  constructor(apiId: number, apiHash: string) {
+  constructor(apiId: number, apiHash: string, sessionString?: string) {
     this.apiId = apiId;
     this.apiHash = apiHash;
+    this.sessionKey = `${apiId}_${apiHash}`;
+    
+    // Initialize client with session if provided
+    if (sessionString) {
+      this.initializeClient(sessionString);
+    }
+  }
+
+  private initializeClient(sessionString?: string) {
+    try {
+      this.client = new TelegramApi(this.apiId, this.apiHash, {
+        connectionRetries: 5,
+        session: sessionString || undefined,
+      });
+      
+      if (this.client) {
+        clients.set(this.sessionKey, this.client);
+      }
+    } catch (error) {
+      console.error('Error initializing Telegram client:', error);
+      throw error;
+    }
   }
 
   async sendCode(phoneNumber: string): Promise<any> {
-    const url = `${this.baseUrl}/auth.sendCode`;
-    
-    const payload = {
-      phone_number: phoneNumber,
-      api_id: this.apiId,
-      api_hash: this.apiHash,
-      settings: {
-        allow_flashcall: false,
-        current_number: false,
-        allow_app_hash: true
-      }
-    };
+    if (!this.client) {
+      this.initializeClient();
+    }
+
+    if (!this.client) {
+      throw new Error('Failed to initialize Telegram client');
+    }
 
     console.log('Sending code request to Telegram:', { phoneNumber, apiId: this.apiId });
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
+      await this.client.connect();
+      
+      const result = await this.client.invoke(
+        new Api.auth.SendCode({
+          phoneNumber: phoneNumber,
+          apiId: this.apiId,
+          apiHash: this.apiHash,
+          settings: new Api.CodeSettings({
+            allowFlashcall: false,
+            currentNumber: false,
+            allowAppHash: true,
+          }),
+        })
+      );
 
-      const result = await response.json();
       console.log('Telegram API response:', result);
       
-      if (!response.ok) {
-        throw new Error(result.description || 'Failed to send code');
-      }
-
-      return result;
+      return {
+        phoneCodeHash: result.phoneCodeHash,
+        phoneNumber: phoneNumber,
+        isRegistered: result.phoneRegistered,
+        nextType: result.nextType?.className || null,
+        timeout: result.timeout || 60,
+      };
     } catch (error) {
       console.error('Error calling Telegram API:', error);
       throw error;
@@ -57,99 +86,135 @@ class TelegramMTProto {
   }
 
   async signIn(phoneNumber: string, phoneCodeHash: string, phoneCode: string): Promise<any> {
-    const url = `${this.baseUrl}/auth.signIn`;
-    
-    const payload = {
-      phone_number: phoneNumber,
-      phone_code_hash: phoneCodeHash,
-      phone_code: phoneCode
-    };
+    if (!this.client) {
+      throw new Error('Client not initialized');
+    }
 
     console.log('Signing in with Telegram:', { phoneNumber, phoneCodeHash });
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
+      const result = await this.client.invoke(
+        new Api.auth.SignIn({
+          phoneNumber: phoneNumber,
+          phoneCodeHash: phoneCodeHash,
+          phoneCode: phoneCode,
+        })
+      );
 
-      const result = await response.json();
       console.log('Sign in response:', result);
       
-      if (!response.ok) {
-        throw new Error(result.description || 'Sign in failed');
+      if (result.className === 'auth.Authorization') {
+        // Successfully logged in
+        const session = this.client.session.save();
+        return {
+          success: true,
+          user: result.user,
+          sessionString: session,
+          authKey: session, // Use session as auth key
+        };
+      } else if (result.className === 'auth.AuthorizationSignUpRequired') {
+        throw new Error('Account registration required');
+      } else {
+        throw new Error('Unexpected response from Telegram');
       }
-
-      return result;
     } catch (error) {
       console.error('Error signing in:', error);
+      
+      // Check if 2FA is required
+      if (error.errorMessage && error.errorMessage.includes('SESSION_PASSWORD_NEEDED')) {
+        return {
+          requires2FA: true,
+          hint: error.hint || 'Enter your 2FA password',
+        };
+      }
+      
       throw error;
     }
   }
 
-  async checkPassword(passwordHash: string): Promise<any> {
-    const url = `${this.baseUrl}/auth.checkPassword`;
-    
-    const payload = {
-      password: passwordHash
-    };
+  async checkPassword(password: string): Promise<any> {
+    if (!this.client) {
+      throw new Error('Client not initialized');
+    }
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const result = await response.json();
+      // Get password info first
+      const passwordInfo = await this.client.invoke(new Api.account.GetPassword());
       
-      if (!response.ok) {
-        throw new Error(result.description || '2FA verification failed');
-      }
+      // Calculate password hash (simplified - in production use proper SRP)
+      const passwordHash = await this.client.computeCheck(passwordInfo, password);
+      
+      const result = await this.client.invoke(
+        new Api.auth.CheckPassword({
+          password: passwordHash,
+        })
+      );
 
-      return result;
+      if (result.className === 'auth.Authorization') {
+        const session = this.client.session.save();
+        return {
+          success: true,
+          user: result.user,
+          sessionString: session,
+          authKey: session,
+        };
+      } else {
+        throw new Error('2FA verification failed');
+      }
     } catch (error) {
       console.error('Error verifying 2FA:', error);
       throw error;
     }
   }
 
-  async getDialogs(authKey: string, limit: number = 50): Promise<any> {
-    const url = `${this.baseUrl}/messages.getDialogs`;
-    
-    const payload = {
-      offset_date: 0,
-      offset_id: 0,
-      offset_peer: { _: 'inputPeerEmpty' },
-      limit: limit,
-      hash: 0
-    };
+  async getDialogs(limit: number = 50): Promise<any> {
+    if (!this.client) {
+      throw new Error('Client not initialized');
+    }
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authKey}`,
-        },
-        body: JSON.stringify(payload)
+      const result = await this.client.invoke(
+        new Api.messages.GetDialogs({
+          offsetDate: 0,
+          offsetId: 0,
+          offsetPeer: new Api.InputPeerEmpty(),
+          limit: limit,
+          hash: 0,
+        })
+      );
+
+      console.log('Dialogs response:', result);
+
+      // Transform the response to match our expected format
+      const dialogs = result.dialogs.map((dialog: any, index: number) => {
+        const peer = result.chats.find((chat: any) => chat.id.toString() === dialog.peer.chatId?.toString()) ||
+                    result.users.find((user: any) => user.id.toString() === dialog.peer.userId?.toString());
+        
+        return {
+          id: dialog.peer.chatId?.toString() || dialog.peer.userId?.toString() || index.toString(),
+          title: peer?.title || peer?.firstName || 'Unknown',
+          type: peer?.className === 'Chat' ? 'group' : peer?.className === 'Channel' ? 'channel' : 'user',
+          unreadCount: dialog.unreadCount || 0,
+          lastMessage: dialog.topMessage || 'No messages',
+          lastMessageDate: new Date().toISOString(),
+        };
       });
 
-      const result = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(result.description || 'Failed to get dialogs');
-      }
-
-      return result;
+      return {
+        dialogs: dialogs,
+        totalCount: result.count || dialogs.length,
+      };
     } catch (error) {
       console.error('Error getting dialogs:', error);
       throw error;
+    }
+  }
+
+  async disconnect() {
+    if (this.client) {
+      await this.client.disconnect();
+      clients.delete(this.sessionKey);
+      this.client = null;
     }
   }
 }
@@ -199,11 +264,14 @@ serve(async (req) => {
         break;
 
       case 'getDialogs':
-        const { auth_key, limit } = params;
-        if (!auth_key) {
-          throw new Error('Auth key is required');
+        const { limit, session_string } = params;
+        if (session_string) {
+          // Reinitialize with session
+          const sessionTelegram = new TelegramMTProto(parseInt(api_id), api_hash, session_string);
+          result = await sessionTelegram.getDialogs(limit || 50);
+        } else {
+          result = await telegram.getDialogs(limit || 50);
         }
-        result = await telegram.getDialogs(auth_key, limit || 50);
         break;
 
       default:

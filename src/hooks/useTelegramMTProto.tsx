@@ -78,12 +78,11 @@ export const useTelegramMTProto = () => {
       if (sessionString) {
         try {
           const sessionData = JSON.parse(sessionString);
-          if (sessionData.isLoggedIn && sessionData.authKey) {
+          if (sessionData.isLoggedIn && sessionData.sessionString) {
             setSession({
               isLoggedIn: true,
-              sessionString,
+              sessionString: sessionData.sessionString,
               phoneNumber: sessionData.phoneNumber,
-              authKey: sessionData.authKey
             });
             setLoginStep('complete');
             toast.success('Session restored successfully!');
@@ -189,25 +188,23 @@ export const useTelegramMTProto = () => {
 
         console.log('Sign in successful:', result);
         
-        // Generate auth key from result
-        const authKey = result.session?.auth_key || `auth_${Date.now()}`;
+        // Use the session string from the MTProto result
+        const sessionString = result.sessionString || result.authKey;
         
         // Save session data
         const sessionData = {
           isLoggedIn: true,
           phoneNumber: session.phoneNumber,
-          authKey: authKey,
+          sessionString: sessionString,
           user: result.user
         };
         
-        const sessionString = JSON.stringify(sessionData);
-        localStorage.setItem('telegram_session', sessionString);
+        localStorage.setItem('telegram_session', JSON.stringify(sessionData));
 
         setSession({
           isLoggedIn: true,
           phoneNumber: session.phoneNumber,
           sessionString: sessionString,
-          authKey: authKey
         });
         setLoginStep('complete');
         toast.success('Successfully logged in to Telegram!');
@@ -264,25 +261,23 @@ export const useTelegramMTProto = () => {
 
       console.log('2FA verification successful:', result);
       
-      // Generate auth key from result
-      const authKey = result.session?.auth_key || `auth_${Date.now()}`;
+      // Use the session string from the MTProto result
+      const sessionString = result.sessionString || result.authKey;
       
       // Save session data
       const sessionData = {
         isLoggedIn: true,
         phoneNumber: session.phoneNumber,
-        authKey: authKey,
+        sessionString: sessionString,
         user: result.user
       };
       
-      const sessionString = JSON.stringify(sessionData);
-      localStorage.setItem('telegram_session', sessionString);
+      localStorage.setItem('telegram_session', JSON.stringify(sessionData));
 
       setSession({
         isLoggedIn: true,
         phoneNumber: session.phoneNumber,
         sessionString: sessionString,
-        authKey: authKey
       });
       setLoginStep('complete');
       toast.success('Successfully logged in with 2FA!');
@@ -310,7 +305,7 @@ export const useTelegramMTProto = () => {
     try {
       setLoading(true);
       
-      if (!session.isLoggedIn || !session.authKey) {
+      if (!session.isLoggedIn || !session.sessionString) {
         toast.error('Not logged in to Telegram');
         return;
       }
@@ -328,45 +323,31 @@ export const useTelegramMTProto = () => {
       const result = await callTelegramAPI('getDialogs', {
         api_id: parseInt(apiId),
         api_hash: apiHash,
-        auth_key: session.authKey,
+        session_string: session.sessionString,
         limit: 50
       });
 
       console.log('Dialogs fetched:', result);
       
-      // Process the dialogs into our chat format
+      // Transform the response to match our expected format
       const chatList: TelegramChat[] = [];
       
       if (result.dialogs && result.dialogs.length > 0) {
         for (const dialog of result.dialogs) {
-          // Find corresponding peer data
-          let peer;
-          if (dialog.peer?._=== 'peerUser') {
-            peer = result.users?.find((u: any) => u.id === dialog.peer.user_id);
-          } else if (dialog.peer?._=== 'peerChat') {
-            peer = result.chats?.find((c: any) => c.id === dialog.peer.chat_id);
-          } else if (dialog.peer?._=== 'peerChannel') {
-            peer = result.chats?.find((c: any) => c.id === dialog.peer.channel_id);
-          }
-
-          if (peer) {
-            const lastMsg = result.messages?.find((m: any) => m.id === dialog.top_message);
-            
-            chatList.push({
-              id: peer.id?.toString() || 'unknown',
-              title: peer.title || `${peer.first_name || ''} ${peer.last_name || ''}`.trim() || 'Unknown',
-              type: peer._ === 'user' ? 'private' : 
-                    peer._ === 'channel' ? 'channel' : 'group',
-              lastMessage: lastMsg ? {
-                id: lastMsg.id,
-                text: lastMsg.message || '[Media]',
-                date: new Date(lastMsg.date * 1000),
-                sender: 'Sender'
-              } : undefined,
-              unreadCount: dialog.unread_count || 0,
-              recentMessages: [] // Will be populated when viewing individual chats
-            });
-          }
+          chatList.push({
+            id: dialog.id,
+            title: dialog.title,
+            type: dialog.type === 'user' ? 'private' : 
+                  dialog.type === 'channel' ? 'channel' : 'group',
+            lastMessage: dialog.lastMessage ? {
+              id: 1,
+              text: dialog.lastMessage,
+              date: new Date(dialog.lastMessageDate),
+              sender: 'Sender'
+            } : undefined,
+            unreadCount: dialog.unreadCount || 0,
+            recentMessages: [] // Will be populated when viewing individual chats
+          });
         }
       }
 
@@ -379,7 +360,7 @@ export const useTelegramMTProto = () => {
     } finally {
       setLoading(false);
     }
-  }, [session.isLoggedIn, session.authKey]);
+  }, [session.isLoggedIn, session.sessionString]);
 
   // Logout
   const logout = useCallback(async () => {
