@@ -75,15 +75,20 @@ class TelegramMTProto {
       throw new Error('Client not initialized');
     }
 
-    console.log('Signing in with Telegram:', { phoneNumber, phoneCodeHash });
+    console.log('Signing in with Telegram:', { phoneNumber, phoneCodeHash, phoneCode });
 
     try {
-      // Use MTKruto's signIn method
-      const result = await this.client.signIn(phoneCodeHash, phoneCode);
+      // Ensure client is connected
+      if (!this.client.connected) {
+        await this.client.connect();
+      }
+
+      // Use MTKruto's signIn method - it takes phoneCode directly
+      const result = await this.client.signIn(phoneCode);
 
       console.log('Sign in response:', result);
       
-      if (result.user) {
+      if (result && result.user) {
         // Successfully logged in
         const authString = await this.client.exportAuthString();
         return {
@@ -93,20 +98,33 @@ class TelegramMTProto {
           authKey: authString,
         };
       } else {
-        throw new Error('Sign in failed');
+        return {
+          success: false,
+          error: 'Sign in failed - invalid response',
+        };
       }
     } catch (error: any) {
       console.error('Error signing in:', error);
       
-      // Check if 2FA is required
-      if (error.message && (error.message.includes('SESSION_PASSWORD_NEEDED') || error.message.includes('password'))) {
+      // Check if 2FA is required based on error message or type
+      if (error.message && (
+        error.message.includes('SESSION_PASSWORD_NEEDED') || 
+        error.message.includes('2FA') ||
+        error.message.includes('password') ||
+        error.errorCode === 'SESSION_PASSWORD_NEEDED'
+      )) {
         return {
+          success: false,
           requires2FA: true,
           hint: error.hint || 'Enter your 2FA password',
         };
       }
       
-      throw error;
+      return {
+        success: false,
+        error: error.message || 'Sign in failed',
+        errorCode: error.errorCode || 'UNKNOWN_ERROR'
+      };
     }
   }
 
@@ -115,11 +133,20 @@ class TelegramMTProto {
       throw new Error('Client not initialized');
     }
 
+    console.log('Checking 2FA password');
+
     try {
+      // Ensure client is connected
+      if (!this.client.connected) {
+        await this.client.connect();
+      }
+
       // Use MTKruto's checkPassword method for 2FA
       const result = await this.client.checkPassword(password);
 
-      if (result.user) {
+      console.log('2FA verification response:', result);
+
+      if (result && result.user) {
         const authString = await this.client.exportAuthString();
         return {
           success: true,
@@ -128,11 +155,18 @@ class TelegramMTProto {
           authKey: authString,
         };
       } else {
-        throw new Error('2FA verification failed');
+        return {
+          success: false,
+          error: '2FA verification failed - invalid password',
+        };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error verifying 2FA:', error);
-      throw error;
+      return {
+        success: false,
+        error: error.message || '2FA verification failed',
+        errorCode: error.errorCode || 'INVALID_PASSWORD'
+      };
     }
   }
 

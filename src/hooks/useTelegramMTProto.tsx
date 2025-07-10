@@ -125,8 +125,8 @@ export const useTelegramMTProto = () => {
 
       console.log('Phone code sent successfully:', result);
       
-      // Extract phone code hash from response
-      const codeHash = result.phone_code_hash || result.phoneCodeHash;
+      // Extract phone code hash from response (handle both formats)
+      const codeHash = result.phoneCodeHash || result.phone_code_hash;
       if (!codeHash) {
         throw new Error('No phone code hash received from Telegram');
       }
