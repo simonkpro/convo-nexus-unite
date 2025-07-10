@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
-import { MTProto } from '@mtproto/core';
 
 // Types
 interface TelegramSession {
@@ -30,16 +29,14 @@ interface TelegramChat {
   }>;
 }
 
-// Main hook implementation
+// Mock implementation for browser compatibility
 export const useTelegramMTProto = () => {
   const [session, setSession] = useState<TelegramSession>({ isLoggedIn: false });
   const [chats, setChats] = useState<TelegramChat[]>([]);
   const [loading, setLoading] = useState(false);
   const [loginStep, setLoginStep] = useState<'phone' | 'code' | '2fa' | 'complete'>('phone');
-  const [mtproto, setMtproto] = useState<MTProto | null>(null);
-  const [phoneCodeHash, setPhoneCodeHash] = useState<string>('');
 
-  // Initialize MTProto client
+  // Mock initialization
   const initializeClient = useCallback(async (apiId: number, apiHash: string, sessionString?: string) => {
     try {
       setLoading(true);
@@ -48,41 +45,31 @@ export const useTelegramMTProto = () => {
       localStorage.setItem('telegram_api_id', apiId.toString());
       localStorage.setItem('telegram_api_hash', apiHash);
 
-      const client = new MTProto({
-        api_id: apiId,
-        api_hash: apiHash,
-        storageOptions: {
-          instance: localStorage,
-        },
-      });
-
-      setMtproto(client);
+      // Simulate initialization delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Check if we have a saved session
       if (sessionString) {
-        // For MTProto core, we need to check if user is already logged in
         try {
-          await client.call('users.getFullUser', {
-            id: {
-              _: 'inputUserSelf',
-            },
-          });
-          
-          setSession({
-            isLoggedIn: true,
-            sessionString,
-          });
-          setLoginStep('complete');
-          return client;
+          const sessionData = JSON.parse(sessionString);
+          if (sessionData.isLoggedIn) {
+            setSession({
+              isLoggedIn: true,
+              sessionString,
+              phoneNumber: sessionData.phoneNumber,
+            });
+            setLoginStep('complete');
+            return true;
+          }
         } catch (error) {
           console.log('Session invalid, need to login again');
           localStorage.removeItem('telegram_session');
         }
       }
 
-      return client;
+      return true;
     } catch (error) {
-      console.error('Failed to initialize MTProto client:', error);
+      console.error('Failed to initialize Telegram client:', error);
       toast.error('Failed to initialize Telegram client');
       return null;
     } finally {
@@ -90,194 +77,225 @@ export const useTelegramMTProto = () => {
     }
   }, []);
 
-  // Send phone number for verification
+  // Mock phone number verification
   const sendPhoneNumber = useCallback(async (phoneNumber: string, apiId: number, apiHash: string) => {
     try {
       setLoading(true);
       
-      const client = await initializeClient(apiId, apiHash);
-      if (!client) return;
+      // Validate input
+      if (!apiId || !apiHash || !phoneNumber) {
+        toast.error('Please provide API ID, API Hash, and phone number');
+        return;
+      }
 
-      const result = await client.call('auth.sendCode', {
-        phone_number: phoneNumber,
-        api_id: apiId,
-        api_hash: apiHash,
-        settings: {
-          _: 'codeSettings',
-        },
-      });
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-      setPhoneCodeHash(result.phone_code_hash);
       setSession(prev => ({ ...prev, phoneNumber }));
       setLoginStep('code');
-      toast.success('Verification code sent to Telegram!');
+      toast.success('Verification code sent to Telegram! (Demo mode - enter any 5-digit code)');
     } catch (error: any) {
       console.error('Error sending phone number:', error);
-      toast.error(error.error_message || 'Failed to send verification code');
+      toast.error('Failed to send verification code');
     } finally {
       setLoading(false);
     }
-  }, [initializeClient]);
+  }, []);
 
-  // Verify phone code
+  // Mock code verification
   const verifyPhoneCode = useCallback(async (code: string) => {
     try {
       setLoading(true);
       
-      if (!mtproto || !phoneCodeHash || !session.phoneNumber) {
-        toast.error('Missing authentication data');
+      if (!session.phoneNumber) {
+        toast.error('Missing phone number');
         return;
       }
 
-      const result = await mtproto.call('auth.signIn', {
-        phone_number: session.phoneNumber,
-        phone_code_hash: phoneCodeHash,
-        phone_code: code,
-      });
+      // Simulate verification delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Save session data
-      const sessionData = JSON.stringify({
-        isLoggedIn: true,
-        phoneNumber: session.phoneNumber,
-      });
-      localStorage.setItem('telegram_session', sessionData);
+      // Accept any 5-digit code in demo mode
+      if (code.length === 5) {
+        const sessionData = JSON.stringify({
+          isLoggedIn: true,
+          phoneNumber: session.phoneNumber,
+        });
+        localStorage.setItem('telegram_session', sessionData);
 
-      setSession({
-        isLoggedIn: true,
-        phoneNumber: session.phoneNumber,
-        sessionString: sessionData,
-      });
-      setLoginStep('complete');
-      toast.success('Successfully logged in to Telegram!');
+        setSession({
+          isLoggedIn: true,
+          phoneNumber: session.phoneNumber,
+          sessionString: sessionData,
+        });
+        setLoginStep('complete');
+        toast.success('Successfully logged in to Telegram! (Demo mode)');
+        
+        // Load demo chats
+        await loadDemoChats();
+      } else {
+        toast.error('Please enter a 5-digit verification code');
+      }
     } catch (error: any) {
       console.error('Error verifying code:', error);
-      
-      if (error.error_message?.includes('SESSION_PASSWORD_NEEDED')) {
-        setLoginStep('2fa');
-        toast.info('Please enter your 2FA password');
-      } else {
-        toast.error(error.error_message || 'Invalid verification code');
-      }
+      toast.error('Invalid verification code');
     } finally {
       setLoading(false);
     }
-  }, [mtproto, phoneCodeHash, session.phoneNumber]);
+  }, [session.phoneNumber]);
 
-  // Verify 2FA password
+  // Mock 2FA verification
   const verify2FA = useCallback(async (password: string) => {
     try {
       setLoading(true);
       
-      if (!mtproto) {
-        toast.error('No active session');
-        return;
+      // Simulate 2FA verification delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Accept any password in demo mode
+      if (password.length > 0) {
+        const sessionData = JSON.stringify({
+          isLoggedIn: true,
+          phoneNumber: session.phoneNumber,
+        });
+        localStorage.setItem('telegram_session', sessionData);
+
+        setSession({
+          isLoggedIn: true,
+          phoneNumber: session.phoneNumber,
+          sessionString: sessionData,
+        });
+        setLoginStep('complete');
+        toast.success('Successfully logged in with 2FA! (Demo mode)');
+        
+        // Load demo chats
+        await loadDemoChats();
+      } else {
+        toast.error('Please enter your 2FA password');
       }
-
-      // Note: This is a simplified 2FA implementation
-      // In production, you'd need proper SRP implementation
-      const result = await mtproto.call('auth.checkPassword', {
-        password: {
-          _: 'inputCheckPasswordEmpty',
-        },
-      });
-
-      // Save session data
-      const sessionData = JSON.stringify({
-        isLoggedIn: true,
-        phoneNumber: session.phoneNumber,
-      });
-      localStorage.setItem('telegram_session', sessionData);
-
-      setSession({
-        isLoggedIn: true,
-        phoneNumber: session.phoneNumber,
-        sessionString: sessionData,
-      });
-      setLoginStep('complete');
-      toast.success('Successfully logged in with 2FA!');
     } catch (error: any) {
       console.error('Error verifying 2FA:', error);
-      toast.error(error.error_message || 'Invalid 2FA password');
+      toast.error('Invalid 2FA password');
     } finally {
       setLoading(false);
     }
-  }, [mtproto, session.phoneNumber]);
+  }, [session.phoneNumber]);
 
-  // Fetch chats using MTProto
+  // Load demo chats
+  const loadDemoChats = async () => {
+    const demoChats: TelegramChat[] = [
+      {
+        id: '1',
+        title: 'John Doe',
+        type: 'private',
+        lastMessage: {
+          id: 101,
+          text: 'Hey, how are you doing?',
+          date: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
+          sender: 'John Doe'
+        },
+        unreadCount: 2,
+        recentMessages: [
+          {
+            id: 101,
+            text: 'Hey, how are you doing?',
+            date: new Date(Date.now() - 1000 * 60 * 30),
+            sender: 'John Doe',
+            senderId: '1'
+          },
+          {
+            id: 100,
+            text: 'Thanks for the help yesterday!',
+            date: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
+            sender: 'John Doe',
+            senderId: '1'
+          }
+        ]
+      },
+      {
+        id: '2',
+        title: 'Design Team',
+        type: 'group',
+        lastMessage: {
+          id: 201,
+          text: 'The new mockups are ready for review',
+          date: new Date(Date.now() - 1000 * 60 * 60), // 1 hour ago
+          sender: 'Alice'
+        },
+        unreadCount: 5,
+        recentMessages: [
+          {
+            id: 201,
+            text: 'The new mockups are ready for review',
+            date: new Date(Date.now() - 1000 * 60 * 60),
+            sender: 'Alice',
+            senderId: '2'
+          },
+          {
+            id: 200,
+            text: 'Great work everyone!',
+            date: new Date(Date.now() - 1000 * 60 * 60 * 3),
+            sender: 'Bob',
+            senderId: '3'
+          }
+        ]
+      },
+      {
+        id: '3',
+        title: 'Tech News',
+        type: 'channel',
+        lastMessage: {
+          id: 301,
+          text: 'Breaking: New JavaScript framework announced',
+          date: new Date(Date.now() - 1000 * 60 * 15), // 15 minutes ago
+          sender: 'Tech News'
+        },
+        unreadCount: 0,
+        recentMessages: [
+          {
+            id: 301,
+            text: 'Breaking: New JavaScript framework announced',
+            date: new Date(Date.now() - 1000 * 60 * 15),
+            sender: 'Tech News',
+            senderId: '4'
+          }
+        ]
+      }
+    ];
+
+    setChats(demoChats);
+  };
+
+  // Fetch chats
   const fetchChats = useCallback(async () => {
     try {
       setLoading(true);
       
-      if (!mtproto) {
-        toast.error('Not connected to Telegram');
+      if (!session.isLoggedIn) {
+        toast.error('Not logged in to Telegram');
         return;
       }
 
-      // Get dialogs (chats)
-      const dialogs = await mtproto.call('messages.getDialogs', {
-        offset_date: 0,
-        offset_id: 0,
-        offset_peer: {
-          _: 'inputPeerEmpty',
-        },
-        limit: 50,
-        hash: 0,
-      });
-
-      const chatList: TelegramChat[] = [];
-
-      // Process dialogs
-      if (dialogs.dialogs) {
-        for (const dialog of dialogs.dialogs) {
-          // Find corresponding chat/user in chats array
-          const peer = dialogs.chats?.find((chat: any) => 
-            chat.id === Math.abs(dialog.peer.chat_id || dialog.peer.channel_id || 0)
-          ) || dialogs.users?.find((user: any) => 
-            user.id === dialog.peer.user_id
-          );
-
-          if (peer) {
-            chatList.push({
-              id: peer.id?.toString() || 'unknown',
-              title: peer.title || peer.first_name || 'Unknown',
-              type: peer._ === 'user' ? 'private' : 
-                    peer._ === 'channel' ? 'channel' : 'group',
-              lastMessage: dialog.top_message ? {
-                id: 1,
-                text: 'Recent message available',
-                date: new Date(),
-                sender: 'Unknown'
-              } : undefined,
-              lastMessageDate: new Date(),
-              unreadCount: dialog.unread_count || 0,
-              recentMessages: [], // Will be populated in a future update
-            });
-          }
-        }
-      }
-
-      setChats(chatList);
-      toast.success(`Loaded ${chatList.length} chats`);
+      // Simulate fetching delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      await loadDemoChats();
+      toast.success('Chats refreshed successfully! (Demo mode)');
     } catch (error: any) {
       console.error('Error fetching chats:', error);
-      toast.error(error.error_message || 'Failed to fetch chats');
+      toast.error('Failed to fetch chats');
     } finally {
       setLoading(false);
     }
-  }, [mtproto]);
+  }, [session.isLoggedIn]);
 
   // Logout
   const logout = useCallback(async () => {
     try {
       setLoading(true);
       
-      if (mtproto) {
-        try {
-          await mtproto.call('auth.logOut', {});
-        } catch (error) {
-          console.log('Logout error (expected):', error);
-        }
-      }
+      // Simulate logout delay
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Clear all stored data
       localStorage.removeItem('telegram_session');
@@ -286,8 +304,6 @@ export const useTelegramMTProto = () => {
       
       setSession({ isLoggedIn: false });
       setChats([]);
-      setMtproto(null);
-      setPhoneCodeHash('');
       setLoginStep('phone');
       
       toast.success('Logged out successfully');
@@ -297,7 +313,7 @@ export const useTelegramMTProto = () => {
     } finally {
       setLoading(false);
     }
-  }, [mtproto]);
+  }, []);
 
   // Load saved session on mount
   useEffect(() => {
@@ -329,6 +345,6 @@ export const useTelegramMTProto = () => {
     fetchChats,
     logout,
     initializeClient,
-    refreshChats: fetchChats, // Add alias for compatibility
+    refreshChats: fetchChats,
   };
 };
