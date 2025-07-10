@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { Api, TelegramApi } from "https://deno.land/x/gramjs@v2.17.19/mod.ts"
+import { Client } from "https://esm.sh/jsr/@mtkruto/mtkruto@0.66.9"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,13 +7,13 @@ const corsHeaders = {
 }
 
 // Store active clients
-const clients = new Map<string, TelegramApi>();
+const clients = new Map<string, Client>();
 
-// MTProto implementation using gramjs
+// MTProto implementation using MTKruto
 class TelegramMTProto {
   private apiId: number;
   private apiHash: string;
-  private client: TelegramApi | null = null;
+  private client: Client | null = null;
   private sessionKey: string;
 
   constructor(apiId: number, apiHash: string, sessionString?: string) {
@@ -21,17 +21,16 @@ class TelegramMTProto {
     this.apiHash = apiHash;
     this.sessionKey = `${apiId}_${apiHash}`;
     
-    // Initialize client with session if provided
-    if (sessionString) {
-      this.initializeClient(sessionString);
-    }
+    // Initialize client
+    this.initializeClient(sessionString);
   }
 
-  private initializeClient(sessionString?: string) {
+  private initializeClient(authString?: string) {
     try {
-      this.client = new TelegramApi(this.apiId, this.apiHash, {
-        connectionRetries: 5,
-        session: sessionString || undefined,
+      this.client = new Client({
+        apiId: this.apiId,
+        apiHash: this.apiHash,
+        authString: authString || undefined,
       });
       
       if (this.client) {
@@ -45,11 +44,7 @@ class TelegramMTProto {
 
   async sendCode(phoneNumber: string): Promise<any> {
     if (!this.client) {
-      this.initializeClient();
-    }
-
-    if (!this.client) {
-      throw new Error('Failed to initialize Telegram client');
+      throw new Error('Client not initialized');
     }
 
     console.log('Sending code request to Telegram:', { phoneNumber, apiId: this.apiId });
@@ -57,18 +52,17 @@ class TelegramMTProto {
     try {
       await this.client.connect();
       
-      const result = await this.client.invoke(
-        new Api.auth.SendCode({
-          phoneNumber: phoneNumber,
-          apiId: this.apiId,
-          apiHash: this.apiHash,
-          settings: new Api.CodeSettings({
-            allowFlashcall: false,
-            currentNumber: false,
-            allowAppHash: true,
-          }),
-        })
-      );
+      const result = await this.client.api.auth.sendCode({
+        phoneNumber: phoneNumber,
+        apiId: this.apiId,
+        apiHash: this.apiHash,
+        settings: {
+          _: "codeSettings",
+          allowFlashcall: false,
+          currentNumber: false,
+          allowAppHash: true,
+        },
+      });
 
       console.log('Telegram API response:', result);
       
@@ -76,7 +70,7 @@ class TelegramMTProto {
         phoneCodeHash: result.phoneCodeHash,
         phoneNumber: phoneNumber,
         isRegistered: result.phoneRegistered,
-        nextType: result.nextType?.className || null,
+        nextType: result.nextType?._,
         timeout: result.timeout || 60,
       };
     } catch (error) {
@@ -93,35 +87,33 @@ class TelegramMTProto {
     console.log('Signing in with Telegram:', { phoneNumber, phoneCodeHash });
 
     try {
-      const result = await this.client.invoke(
-        new Api.auth.SignIn({
-          phoneNumber: phoneNumber,
-          phoneCodeHash: phoneCodeHash,
-          phoneCode: phoneCode,
-        })
-      );
+      const result = await this.client.api.auth.signIn({
+        phoneNumber: phoneNumber,
+        phoneCodeHash: phoneCodeHash,
+        phoneCode: phoneCode,
+      });
 
       console.log('Sign in response:', result);
       
-      if (result.className === 'auth.Authorization') {
+      if (result._ === 'auth.authorization') {
         // Successfully logged in
-        const session = this.client.session.save();
+        const authString = await this.client.exportAuthString();
         return {
           success: true,
           user: result.user,
-          sessionString: session,
-          authKey: session, // Use session as auth key
+          sessionString: authString,
+          authKey: authString,
         };
-      } else if (result.className === 'auth.AuthorizationSignUpRequired') {
+      } else if (result._ === 'auth.authorizationSignUpRequired') {
         throw new Error('Account registration required');
       } else {
         throw new Error('Unexpected response from Telegram');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing in:', error);
       
       // Check if 2FA is required
-      if (error.errorMessage && error.errorMessage.includes('SESSION_PASSWORD_NEEDED')) {
+      if (error.message && error.message.includes('SESSION_PASSWORD_NEEDED')) {
         return {
           requires2FA: true,
           hint: error.hint || 'Enter your 2FA password',
@@ -138,25 +130,22 @@ class TelegramMTProto {
     }
 
     try {
-      // Get password info first
-      const passwordInfo = await this.client.invoke(new Api.account.GetPassword());
-      
-      // Calculate password hash (simplified - in production use proper SRP)
-      const passwordHash = await this.client.computeCheck(passwordInfo, password);
-      
-      const result = await this.client.invoke(
-        new Api.auth.CheckPassword({
-          password: passwordHash,
-        })
-      );
+      const result = await this.client.api.auth.checkPassword({
+        password: {
+          _: "inputCheckPasswordSRP",
+          srpId: "0",
+          A: new Uint8Array(),
+          M1: new Uint8Array(),
+        }
+      });
 
-      if (result.className === 'auth.Authorization') {
-        const session = this.client.session.save();
+      if (result._ === 'auth.authorization') {
+        const authString = await this.client.exportAuthString();
         return {
           success: true,
           user: result.user,
-          sessionString: session,
-          authKey: session,
+          sessionString: authString,
+          authKey: authString,
         };
       } else {
         throw new Error('2FA verification failed');
@@ -173,36 +162,27 @@ class TelegramMTProto {
     }
 
     try {
-      const result = await this.client.invoke(
-        new Api.messages.GetDialogs({
-          offsetDate: 0,
-          offsetId: 0,
-          offsetPeer: new Api.InputPeerEmpty(),
-          limit: limit,
-          hash: 0,
-        })
-      );
+      const result = await this.client.getDialogs({
+        limit: limit,
+      });
 
       console.log('Dialogs response:', result);
 
       // Transform the response to match our expected format
-      const dialogs = result.dialogs.map((dialog: any, index: number) => {
-        const peer = result.chats.find((chat: any) => chat.id.toString() === dialog.peer.chatId?.toString()) ||
-                    result.users.find((user: any) => user.id.toString() === dialog.peer.userId?.toString());
-        
+      const dialogs = result.map((dialog: any) => {
         return {
-          id: dialog.peer.chatId?.toString() || dialog.peer.userId?.toString() || index.toString(),
-          title: peer?.title || peer?.firstName || 'Unknown',
-          type: peer?.className === 'Chat' ? 'group' : peer?.className === 'Channel' ? 'channel' : 'user',
+          id: dialog.id,
+          title: dialog.title,
+          type: dialog.isChannel ? 'channel' : dialog.isGroup ? 'group' : 'user',
           unreadCount: dialog.unreadCount || 0,
-          lastMessage: dialog.topMessage || 'No messages',
-          lastMessageDate: new Date().toISOString(),
+          lastMessage: dialog.lastMessage?.text || 'No messages',
+          lastMessageDate: dialog.lastMessage?.date ? new Date(dialog.lastMessage.date * 1000).toISOString() : new Date().toISOString(),
         };
       });
 
       return {
         dialogs: dialogs,
-        totalCount: result.count || dialogs.length,
+        totalCount: dialogs.length,
       };
     } catch (error) {
       console.error('Error getting dialogs:', error);
