@@ -130,13 +130,9 @@ class TelegramMTProto {
     }
 
     try {
+      // Use MTKruto's built-in 2FA password verification
       const result = await this.client.api.auth.checkPassword({
-        password: {
-          _: "inputCheckPasswordSRP",
-          srpId: "0",
-          A: new Uint8Array(),
-          M1: new Uint8Array(),
-        }
+        password: await this.client.checkPassword(password)
       });
 
       if (result._ === 'auth.authorization') {
